@@ -1,0 +1,656 @@
+import React, { useState, useEffect } from 'react';
+import { router } from '@inertiajs/react';
+import {
+    LayoutDashboard, Car, AlertTriangle,
+    CheckCircle, Clock, BarChart3, Wrench, Users,
+    LogOut, Trash2, UserPlus, Building2, TrendingUp, DollarSign,
+    History, Calendar, Info, Pencil, ChevronRight, Activity
+} from 'lucide-react';
+import api from '../../Services/api';
+import MachineForm from '../../Components/MachineForm';
+
+const C = '#F5A623';
+
+// Componente stat card reutilizable
+const StatCard = ({ label, value, color, icon: Icon, active, onClick }) => (
+    <button onClick={onClick} className="p-5 rounded-2xl text-left relative overflow-hidden transition-all"
+        style={{
+            background: active ? 'rgba(245,166,35,0.08)' : '#111',
+            border: active ? `1px solid ${color || C}` : '1px solid #222',
+        }}>
+        <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: color || '#888' }}>{label}</p>
+        <p className="text-3xl font-black mt-2" style={{ color: color || '#E8E8E8' }}>{value}</p>
+        <Icon className="absolute right-3 bottom-3 w-10 h-10 opacity-10" style={{ color: color || '#888' }} />
+    </button>
+);
+
+export default function AdminDashboard() {
+    const [machines, setMachines]           = useState([]);
+    const [users, setUsers]                 = useState([]);
+    const [stats, setStats]                 = useState({ total: 0, propias: 0, terceros: 0, disponibles: 0, alquiladas: 0 });
+    const [activeTab, setActiveTab]         = useState('overview');
+    const [filterType, setFilterType]       = useState('all');
+    const [selectedMachineMaster, setSelectedMachineMaster] = useState(null);
+    const [selectedClientHistory, setSelectedClientHistory] = useState(null);
+    const [salesPeriod, setSalesPeriod]     = useState('monthly');
+    const [financeStats, setFinanceStats]   = useState({ facturacion: 0, margen: 0, costo: 0, tasa_ocupacion: 0 });
+    const [newUser, setNewUser]             = useState({
+        role: 'client', email: '', password: '', username: '',
+        first_name: '', last_name: '', phone: '', company_name: '', cuit: '', business_name: ''
+    });
+    const [maintenanceHistory, setMaintenanceHistory]         = useState([]);
+    const [selectedChecklistDetails, setSelectedChecklistDetails] = useState(null);
+
+    const fetchMachines = async () => {
+        try {
+            const res = await api.get('/machines');
+            const { machines: data, analytics } = res.data;
+            const list = data || [];
+            setMachines(list);
+            setStats({
+                total: list.length,
+                propias: list.filter(m => m.ownership_type === 'propia').length,
+                terceros: list.filter(m => m.ownership_type === 'terceros').length,
+                disponibles: list.filter(m => m.status === 'available').length,
+                alquiladas: list.filter(m => m.status === 'rented').length,
+            });
+            if (analytics) {
+                setFinanceStats(salesPeriod === 'weekly' ? {
+                    facturacion: analytics.facturacion_semanal,
+                    margen: analytics.margen_propio_semanal,
+                    costo: analytics.costo_terceros_semanal,
+                    tasa_ocupacion: analytics.tasa_ocupacion ?? 0,
+                } : {
+                    facturacion: analytics.facturacion_mensual,
+                    margen: analytics.margen_propio_mensual,
+                    costo: analytics.costo_terceros_mensual,
+                    tasa_ocupacion: analytics.tasa_ocupacion ?? 0,
+                });
+            }
+        } catch (e) { console.error(e); }
+    };
+
+    const fetchUsers = async () => {
+        try {
+            const res = await api.get('/users');
+            setUsers(res.data);
+        } catch { setUsers([]); }
+    };
+
+    useEffect(() => { fetchMachines(); fetchUsers(); }, [salesPeriod]);
+
+    const handleLogout = () => router.post('/logout');
+
+    const handleCreateUser = async (e) => {
+        e.preventDefault();
+        try {
+            const payload = {
+                role: newUser.role,
+                email: newUser.email,
+                password: newUser.password,
+                name: newUser.role === 'mechanic' ? `${newUser.first_name} ${newUser.last_name}` : newUser.company_name,
+                phone: newUser.phone, cuit: newUser.cuit, business_name: newUser.business_name,
+            };
+            await api.post('/users', payload);
+            alert(`¡Éxito! Usuario ${payload.name} registrado.`);
+            fetchUsers();
+            setNewUser({ role: 'client', email: '', password: '', username: '', first_name: '', last_name: '', phone: '', company_name: '', cuit: '', business_name: '' });
+        } catch (e) { console.error(e); alert('Error al registrar el usuario. Revisá la consola.'); }
+    };
+
+    const handleDeleteUser = async (id) => {
+        if (confirm('¿Seguro que querés eliminar este usuario?')) {
+            try { await api.delete(`/users/${id}`); setUsers(users.filter(u => u.id !== id)); }
+            catch { alert('Error al eliminar el usuario.'); }
+        }
+    };
+
+    const handleDeleteMachine = async (id) => {
+        if (confirm('¿Seguro que querés dar de baja esta máquina?')) {
+            try {
+                await api.delete(`/machines/${id}`);
+                fetchMachines();
+                if (selectedMachineMaster?.id === id) setSelectedMachineMaster(null);
+            } catch { alert('Error al eliminar la máquina.'); }
+        }
+    };
+
+    const filteredMachines = machines.filter(m => {
+        if (filterType === 'propia') return m.ownership_type === 'propia';
+        if (filterType === 'terceros') return m.ownership_type === 'terceros';
+        if (filterType === 'available') return m.status === 'available';
+        if (filterType === 'rented') return m.status === 'rented';
+        return true;
+    });
+
+    const navItems = [
+        { id: 'overview',  label: 'Panel de Control', icon: LayoutDashboard },
+        { id: 'analytics', label: 'Analíticas',        icon: BarChart3 },
+        { id: 'users',     label: 'Usuarios',          icon: Users },
+    ];
+
+    return (
+        <div className="flex h-screen font-sans overflow-hidden" style={{ background: '#0a0a0a', color: '#E8E8E8' }}>
+
+            {/* SIDEBAR */}
+            <aside className="w-60 flex flex-col justify-between p-5" style={{ background: '#111', borderRight: '1px solid #222' }}>
+                <div className="space-y-6">
+                    <div className="flex flex-col items-center pb-5" style={{ borderBottom: '1px solid #222' }}>
+                        <img src="/images/logo-torq.png" alt="Torq" className="w-36 object-contain" />
+                    </div>
+                    <nav className="space-y-1">
+                        {navItems.map(({ id, label, icon: Icon }) => (
+                            <button key={id}
+                                onClick={() => { setActiveTab(id); setSelectedMachineMaster(null); }}
+                                className="flex items-center space-x-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
+                                style={activeTab === id
+                                    ? { background: C, color: '#0a0a0a', fontWeight: 800 }
+                                    : { color: '#888' }}>
+                                <Icon className="w-4 h-4 shrink-0" />
+                                <span>{label}</span>
+                            </button>
+                        ))}
+                    </nav>
+                </div>
+                <div className="space-y-3">
+                    <button onClick={handleLogout}
+                        className="flex items-center space-x-2 w-full px-3 py-2.5 rounded-xl text-sm font-bold"
+                        style={{ color: '#ef4444' }}>
+                        <LogOut className="w-4 h-4" /><span>Cerrar Sesión</span>
+                    </button>
+                    <div className="p-3 rounded-xl flex items-center gap-2 text-xs" style={{ background: '#161616', border: '1px solid #222' }}>
+                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        <span style={{ color: '#888' }}>Admin conectado</span>
+                    </div>
+                </div>
+            </aside>
+
+            {/* MAIN */}
+            <main className="flex-1 overflow-y-auto p-8">
+
+                {/* VISTA DETALLE DE MÁQUINA */}
+                {selectedMachineMaster ? (
+                    <div className="space-y-5 animate-fadeIn">
+                        <div className="flex justify-between items-center">
+                            <button onClick={() => { setSelectedMachineMaster(null); setSelectedChecklistDetails(null); }}
+                                className="text-xs font-bold px-4 py-2 rounded-xl transition"
+                                style={{ background: '#111', border: '1px solid #222', color: '#888' }}>
+                                ← Volver
+                            </button>
+                            <span className={selectedMachineMaster.status === 'available' ? 'badge-available' : 'badge-rented'}>
+                                {selectedMachineMaster.status === 'available' ? 'Disponible' : 'Alquilada'}
+                            </span>
+                        </div>
+
+                        {/* Header máquina */}
+                        <div className="p-6 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
+                            <div className="flex items-center gap-3 mb-2">
+                                <h2 className="text-3xl font-black" style={{ color: C }}>{selectedMachineMaster.name}</h2>
+                                <span className={selectedMachineMaster.ownership_type === 'propia' ? 'badge-propia' : 'badge-terceros'}>
+                                    {selectedMachineMaster.ownership_type}
+                                </span>
+                            </div>
+                            <p className="text-xs mb-4" style={{ color: '#888' }}>
+                                Modelo: {selectedMachineMaster.model} · S/N: {selectedMachineMaster.serial_number}
+                            </p>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-3 rounded-xl flex items-center gap-3" style={{ background: '#161616', border: '1px solid #222' }}>
+                                    <Clock className="w-5 h-5" style={{ color: C }} />
+                                    <div>
+                                        <p className="text-[10px] uppercase font-black" style={{ color: '#888' }}>Horómetro</p>
+                                        <p className="font-black">{selectedMachineMaster.current_hours} hs</p>
+                                    </div>
+                                </div>
+                                <div className="p-3 rounded-xl flex items-center gap-3" style={{ background: '#161616', border: '1px solid #222' }}>
+                                    <AlertTriangle className={`w-5 h-5 ${selectedMachineMaster.current_hours % 250 >= 220 ? 'text-red-500 animate-pulse' : ''}`}
+                                        style={selectedMachineMaster.current_hours % 250 < 220 ? { color: '#444' } : {}} />
+                                    <div>
+                                        <p className="text-[10px] uppercase font-black" style={{ color: '#888' }}>Próximo Service</p>
+                                        <p className="font-black">{Math.ceil((selectedMachineMaster.current_hours + 1) / 250) * 250} hs
+                                            <span className="text-xs font-normal ml-1" style={{ color: '#888' }}>
+                                                ({250 - (selectedMachineMaster.current_hours % 250)} restantes)
+                                            </span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Contrato activo */}
+                        <div className="p-6 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
+                            <h3 className="font-black text-sm flex items-center gap-2 pb-3 mb-4" style={{ borderBottom: '1px solid #222' }}>
+                                <Calendar className="w-4 h-4" style={{ color: C }} /> Contrato Activo
+                            </h3>
+                            {selectedMachineMaster.status === 'rented' ? (
+                                <div className="grid grid-cols-3 gap-6">
+                                    <div>
+                                        <p className="text-[10px] uppercase font-black mb-1" style={{ color: '#888' }}>Cliente</p>
+                                        <p className="font-bold">{selectedMachineMaster.client_rented_name}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] uppercase font-black mb-1" style={{ color: '#888' }}>Período</p>
+                                        <p className="text-sm">{selectedMachineMaster.rented_from} → {selectedMachineMaster.rented_to}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] uppercase font-black mb-1" style={{ color: '#888' }}>Valor del Contrato</p>
+                                        <p className="font-black text-lg" style={{ color: '#4ade80' }}>
+                                            ${selectedMachineMaster.rental_price ? Number(selectedMachineMaster.rental_price).toLocaleString() : '—'} USD
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-xs italic" style={{ color: '#666' }}>No hay contrato activo. La máquina está disponible en base.</p>
+                            )}
+                        </div>
+
+                        {/* Historial de checklists */}
+                        <div className="p-6 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
+                            <h3 className="font-black text-sm flex items-center gap-2 pb-3 mb-4" style={{ borderBottom: '1px solid #222' }}>
+                                <Wrench className="w-4 h-4" style={{ color: C }} /> Planillas Técnicas
+                            </h3>
+                            <div className="grid grid-cols-3 gap-5">
+                                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                                    {maintenanceHistory.length === 0 ? (
+                                        <p className="text-xs italic" style={{ color: '#666' }}>Sin planillas registradas.</p>
+                                    ) : maintenanceHistory.map(log => (
+                                        <div key={log.id} onClick={() => setSelectedChecklistDetails(log)}
+                                            className="p-3 rounded-xl text-xs cursor-pointer transition"
+                                            style={selectedChecklistDetails?.id === log.id
+                                                ? { background: 'rgba(245,166,35,0.1)', border: `1px solid ${C}` }
+                                                : { background: '#161616', border: '1px solid #222' }}>
+                                            <div className="flex justify-between">
+                                                <span className="font-bold" style={selectedChecklistDetails?.id === log.id ? { color: C } : {}}>
+                                                    Control #{log.id}
+                                                </span>
+                                                <span style={{ color: '#666' }}>{new Date(log.created_at).toLocaleDateString()}</span>
+                                            </div>
+                                            <p className="mt-1" style={{ color: '#888' }}>Por: {log.mechanic_name}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="col-span-2 rounded-xl p-4" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                                    {selectedChecklistDetails ? (
+                                        <div className="space-y-3 animate-fadeIn">
+                                            <div className="flex justify-between items-center pb-2" style={{ borderBottom: '1px solid #1e1e1e' }}>
+                                                <h4 className="font-black text-sm" style={{ color: C }}>Planilla Oficial</h4>
+                                                <span className="text-[10px] font-black px-2 py-0.5 rounded" style={{ background: '#161616', color: '#888' }}>
+                                                    CERT-{selectedChecklistDetails.id}
+                                                </span>
+                                            </div>
+                                            <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
+                                                {selectedChecklistDetails.inspections && (() => {
+                                                    let parsed = selectedChecklistDetails.inspections;
+                                                    if (typeof parsed === 'string') try { parsed = JSON.parse(parsed); } catch { return null; }
+                                                    const items = Array.isArray(parsed) ? parsed : Object.values(parsed);
+                                                    return items.map((item, idx) => {
+                                                        const sc = item.status === 'Apto' ? '#4ade80' : item.status === 'No Apto' ? '#f87171' : C;
+                                                        return (
+                                                            <div key={idx} className="flex justify-between items-center px-3 py-2 rounded-lg text-xs"
+                                                                style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #1e1e1e' }}>
+                                                                <span style={{ color: '#ccc' }}>{(item.id || idx+1)}. {item.name}</span>
+                                                                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded"
+                                                                    style={{ color: sc, background: `${sc}15`, border: `1px solid ${sc}33` }}>
+                                                                    {item.status}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    });
+                                                })()}
+                                            </div>
+                                            <div className="p-3 rounded-xl text-xs" style={{ background: '#161616', border: '1px solid #222' }}>
+                                                <strong className="block text-[9px] uppercase tracking-widest mb-1" style={{ color: C }}>Diagnóstico:</strong>
+                                                <p className="italic" style={{ color: '#aaa' }}>"{selectedChecklistDetails.general_observations || 'Sin comentarios.'}"</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="h-full flex items-center justify-center text-center py-8">
+                                            <p className="text-xs" style={{ color: '#555' }}>Seleccioná una planilla para ver el detalle.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                ) : (
+                    <>
+                        {/* ─── TAB: OVERVIEW ─── */}
+                        {activeTab === 'overview' && (
+                            <div className="space-y-7 animate-fadeIn">
+                                <div>
+                                    <h1 className="text-3xl font-black tracking-tight">Panel de Control</h1>
+                                    <p className="text-sm mt-1" style={{ color: '#888' }}>Clic en cualquier máquina para ver su ficha técnica completa.</p>
+                                </div>
+
+                                {/* Stats */}
+                                <div className="grid grid-cols-5 gap-4">
+                                    <StatCard label="Total Flota"   value={stats.total}       icon={Car}          active={filterType==='all'}       onClick={() => setFilterType('all')} />
+                                    <StatCard label="Flota Propia"  value={stats.propias}     icon={CheckCircle}  color="#4ade80" active={filterType==='propia'}    onClick={() => setFilterType('propia')} />
+                                    <StatCard label="Terceros"      value={stats.terceros}    icon={Building2}    color="#60a5fa" active={filterType==='terceros'}  onClick={() => setFilterType('terceros')} />
+                                    <StatCard label="Disponibles"   value={stats.disponibles} icon={CheckCircle}  color="#34d399" active={filterType==='available'} onClick={() => setFilterType('available')} />
+                                    <StatCard label="Alquiladas"    value={stats.alquiladas}  icon={Clock}        color={C}       active={filterType==='rented'}    onClick={() => setFilterType('rented')} />
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-6">
+                                    <div className="col-span-1">
+                                        <MachineForm onMachineAdded={fetchMachines} />
+                                    </div>
+
+                                    <div className="col-span-2 rounded-2xl p-6" style={{ background: '#111', border: '1px solid #222' }}>
+                                        <div className="flex justify-between items-center pb-3 mb-4" style={{ borderBottom: '1px solid #222' }}>
+                                            <h3 className="font-black">Monitoreo de Flota</h3>
+                                            <span className="text-[10px] uppercase font-black px-2 py-1 rounded" style={{ background: '#161616', color: '#888', border: '1px solid #222' }}>
+                                                Filtro: {filterType}
+                                            </span>
+                                        </div>
+                                        <div className="divide-y overflow-y-auto max-h-[440px] pr-1" style={{ borderColor: '#1e1e1e' }}>
+                                            {filteredMachines.length === 0 ? (
+                                                <p className="text-sm text-center py-8" style={{ color: '#888' }}>Sin maquinarias para este filtro.</p>
+                                            ) : filteredMachines.map(m => (
+                                                <div key={m.id} onClick={() => {
+                                                        setSelectedMachineMaster(m);
+                                                        api.get(`/maintenance-checklists/machine/${m.id}`)
+                                                            .then(res => setMaintenanceHistory(res.data || []))
+                                                            .catch(console.error);
+                                                    }}
+                                                    className="flex items-center justify-between py-4 first:pt-0 cursor-pointer px-2 rounded-xl transition group"
+                                                    style={{ borderColor: '#1e1e1e' }}
+                                                    onMouseOver={e => e.currentTarget.style.background='rgba(255,255,255,0.02)'}
+                                                    onMouseOut={e => e.currentTarget.style.background='transparent'}>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-bold text-sm transition-colors group-hover:text-amber-400" style={{ color: '#E8E8E8' }}>{m.name}</p>
+                                                            <span className={m.ownership_type === 'propia' ? 'badge-propia' : 'badge-terceros'}>{m.ownership_type}</span>
+                                                            {m.supplier_name && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color:'#888', background:'#161616', border:'1px solid #2a2a2a' }}>📦 {m.supplier_name}</span>}
+                                                        </div>
+                                                        <p className="text-xs" style={{ color: '#888' }}>S/N: {m.serial_number} · <span style={{ color: '#aaa', fontWeight: 600 }}>{m.current_hours} hs</span></p>
+                                                        {m.status === 'rented' && (
+                                                            <p className="text-xs" style={{ color: '#888' }}>
+                                                                📍 <span style={{ color: C, fontWeight: 700 }}>{m.client_rented_name}</span>
+                                                                {m.rental_price && <span className="ml-2 font-black" style={{ color: '#4ade80' }}>${Number(m.rental_price).toLocaleString()} USD</span>}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={m.status === 'available' ? 'badge-available' : 'badge-rented'}>
+                                                            {m.status === 'available' ? 'Disponible' : 'Alquilada'}
+                                                        </span>
+                                                        <button onClick={e => { e.stopPropagation(); handleDeleteMachine(m.id); }}
+                                                            className="p-2 rounded-xl transition"
+                                                            style={{ background: '#161616', color: '#555', border: '1px solid #222' }}
+                                                            onMouseOver={e => { e.currentTarget.style.color='#f87171'; e.currentTarget.style.borderColor='rgba(248,113,113,0.3)'; }}
+                                                            onMouseOut={e => { e.currentTarget.style.color='#555'; e.currentTarget.style.borderColor='#222'; }}>
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                        <div className="p-2 rounded-xl" style={{ background: '#161616', border: '1px solid #222', color: '#555' }}>
+                                                            <ChevronRight className="w-4 h-4 group-hover:text-amber-400 transition-colors" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ─── TAB: ANALYTICS ─── */}
+                        {activeTab === 'analytics' && (
+                            <div className="space-y-6 animate-fadeIn">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <h2 className="text-2xl font-black">Analíticas Comerciales</h2>
+                                        <p className="text-xs mt-1" style={{ color: '#888' }}>Datos reales calculados desde contratos activos en la base de datos.</p>
+                                    </div>
+                                    <div className="flex gap-1 p-1 rounded-xl" style={{ background: '#111', border: '1px solid #222' }}>
+                                        <button onClick={() => setSalesPeriod('weekly')}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-bold transition"
+                                            style={salesPeriod === 'weekly' ? { background: C, color: '#0a0a0a' } : { color: '#888' }}>
+                                            Semanal
+                                        </button>
+                                        <button onClick={() => setSalesPeriod('monthly')}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-bold transition"
+                                            style={salesPeriod === 'monthly' ? { background: C, color: '#0a0a0a' } : { color: '#888' }}>
+                                            Mensual
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-5">
+                                    {[
+                                        { label: `Facturación Real (${salesPeriod === 'weekly' ? 'Semanal' : 'Mensual'})`, value: financeStats.facturacion, color: C, icon: TrendingUp, sub: 'Suma de contratos activos en DB' },
+                                        { label: 'Margen Flota Propia', value: financeStats.margen, color: '#4ade80', icon: DollarSign, sub: 'Facturación menos costos de terceros' },
+                                        { label: 'Costo Subalquileres', value: financeStats.costo, color: '#60a5fa', icon: Building2, sub: 'Pago a propietarios de máquinas terceros' },
+                                    ].map(s => (
+                                        <div key={s.label} className="p-6 rounded-2xl flex items-center justify-between" style={{ background: '#111', border: '1px solid #222' }}>
+                                            <div className="space-y-1">
+                                                <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: '#888' }}>{s.label}</p>
+                                                <p className="text-3xl font-black" style={{ color: s.color }}>${Number(s.value).toLocaleString()} USD</p>
+                                                <p className="text-[10px]" style={{ color: '#555' }}>{s.sub}</p>
+                                            </div>
+                                            <s.icon className="w-10 h-10 opacity-15" style={{ color: s.color }} />
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Tasa de ocupación */}
+                                <div className="p-5 rounded-2xl flex items-center justify-between" style={{ background: '#111', border: '1px solid #222' }}>
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: '#888' }}>Tasa de Ocupación de Flota</p>
+                                        <p className="text-2xl font-black" style={{ color: C }}>{financeStats.tasa_ocupacion}%</p>
+                                        <p className="text-[10px]" style={{ color: '#555' }}>{stats.alquiladas} de {stats.total} unidades actualmente alquiladas</p>
+                                    </div>
+                                    <div className="w-40">
+                                        <div className="h-3 rounded-full overflow-hidden" style={{ background: '#222' }}>
+                                            <div className="h-full rounded-full transition-all duration-700"
+                                                style={{ width: `${financeStats.tasa_ocupacion}%`, background: C }} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Ranking de máquinas */}
+                                <div className="p-6 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
+                                    <h3 className="font-black mb-4 flex items-center gap-2">
+                                        <Activity className="w-4 h-4" style={{ color: C }} /> Máquinas en Contrato Activo
+                                    </h3>
+                                    <div className="space-y-3">
+                                        {machines.filter(m => m.status === 'rented').length === 0 ? (
+                                            <p className="text-sm" style={{ color: '#888' }}>No hay contratos activos en este momento.</p>
+                                        ) : machines.filter(m => m.status === 'rented').map((m, idx) => (
+                                            <div key={m.id} className="p-4 rounded-xl flex justify-between items-center"
+                                                style={{ background: '#161616', border: '1px solid #222' }}>
+                                                <div>
+                                                    <p className="font-bold text-sm">{idx + 1}. {m.name}</p>
+                                                    <p className="text-xs mt-0.5" style={{ color: '#888' }}>
+                                                        Cliente: <span style={{ color: '#aaa' }}>{m.client_rented_name}</span>
+                                                        · {m.current_hours} hs acumuladas
+                                                    </p>
+                                                </div>
+                                                <div className="text-right">
+                                                    {m.rental_price
+                                                        ? <p className="font-black" style={{ color: '#4ade80' }}>${Number(m.rental_price).toLocaleString()} USD</p>
+                                                        : <p className="text-xs" style={{ color: '#888' }}>Sin precio registrado</p>}
+                                                    <span className={m.ownership_type === 'propia' ? 'badge-propia' : 'badge-terceros'}>{m.ownership_type}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ─── TAB: USERS ─── */}
+                        {activeTab === 'users' && (
+                            <div className="space-y-6 animate-fadeIn">
+                                <div>
+                                    <h2 className="text-2xl font-black">Gestión de Usuarios</h2>
+                                    <p className="text-xs mt-1" style={{ color: '#888' }}>Alta y baja de clientes y mecánicos del sistema.</p>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-6">
+                                    {/* Formulario alta */}
+                                    <form onSubmit={handleCreateUser} className="col-span-1 p-6 rounded-2xl space-y-4 h-fit" style={{ background: '#111', border: '1px solid #222' }}>
+                                        <h3 className="font-black flex items-center gap-2">
+                                            <UserPlus className="w-4 h-4" style={{ color: C }} /> Nuevo Usuario
+                                        </h3>
+
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Rol</label>
+                                            <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}
+                                                className="block w-full rounded-xl text-sm px-3 py-2">
+                                                <option value="client">Cliente</option>
+                                                <option value="mechanic">Mecánico</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="p-4 rounded-xl space-y-3" style={{ background: '#161616', border: '1px solid #1e1e1e' }}>
+                                            {newUser.role === 'mechanic' ? (
+                                                <>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div>
+                                                            <label className="block text-[10px] font-black uppercase mb-1" style={{ color: '#888' }}>Nombre</label>
+                                                            <input type="text" required value={newUser.first_name}
+                                                                onChange={e => setNewUser({...newUser, first_name: e.target.value})}
+                                                                className="block w-full rounded-xl text-sm px-3 py-2" placeholder="Juan" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[10px] font-black uppercase mb-1" style={{ color: '#888' }}>Apellido</label>
+                                                            <input type="text" required value={newUser.last_name}
+                                                                onChange={e => setNewUser({...newUser, last_name: e.target.value})}
+                                                                className="block w-full rounded-xl text-sm px-3 py-2" placeholder="Pérez" />
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-black uppercase mb-1" style={{ color: '#888' }}>Teléfono</label>
+                                                        <input type="tel" value={newUser.phone}
+                                                            onChange={e => setNewUser({...newUser, phone: e.target.value})}
+                                                            className="block w-full rounded-xl text-sm px-3 py-2" placeholder="+54 9 11..." />
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div>
+                                                        <label className="block text-[10px] font-black uppercase mb-1" style={{ color: '#888' }}>Empresa</label>
+                                                        <input type="text" required value={newUser.company_name}
+                                                            onChange={e => setNewUser({...newUser, company_name: e.target.value})}
+                                                            className="block w-full rounded-xl text-sm px-3 py-2" placeholder="Constructora Sur S.A." />
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div>
+                                                            <label className="block text-[10px] font-black uppercase mb-1" style={{ color: '#888' }}>Razón Social</label>
+                                                            <input type="text" value={newUser.business_name}
+                                                                onChange={e => setNewUser({...newUser, business_name: e.target.value})}
+                                                                className="block w-full rounded-xl text-sm px-3 py-2" placeholder="Constructora SA" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[10px] font-black uppercase mb-1" style={{ color: '#888' }}>CUIT</label>
+                                                            <input type="text" value={newUser.cuit}
+                                                                onChange={e => setNewUser({...newUser, cuit: e.target.value})}
+                                                                className="block w-full rounded-xl text-sm px-3 py-2" placeholder="30-71..." />
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-3 pt-1" style={{ borderTop: '1px solid #222' }}>
+                                            <div>
+                                                <label className="block text-[10px] font-black uppercase mb-1.5" style={{ color: '#888' }}>Email</label>
+                                                <input type="email" required value={newUser.email}
+                                                    onChange={e => setNewUser({...newUser, email: e.target.value})}
+                                                    className="block w-full rounded-xl text-sm px-3 py-2" placeholder="correo@empresa.com" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-black uppercase mb-1.5" style={{ color: '#888' }}>Contraseña</label>
+                                                <input type="password" required value={newUser.password}
+                                                    onChange={e => setNewUser({...newUser, password: e.target.value})}
+                                                    className="block w-full rounded-xl text-sm px-3 py-2" placeholder="••••••••" />
+                                            </div>
+                                        </div>
+
+                                        <button type="submit"
+                                            className="w-full py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition torq-glow"
+                                            style={{ background: C, color: '#0a0a0a' }}>
+                                            Inscribir en Torq
+                                        </button>
+                                    </form>
+
+                                    {/* Lista de usuarios */}
+                                    <div className="col-span-2 space-y-5">
+                                        <div className="p-6 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
+                                            <h3 className="font-black mb-4">Nómina del Sistema</h3>
+                                            <div className="divide-y" style={{ borderColor: '#1e1e1e' }}>
+                                                {users.length === 0 ? (
+                                                    <p className="text-sm text-center py-4" style={{ color: '#888' }}>Sin usuarios registrados.</p>
+                                                ) : users.map(u => (
+                                                    <div key={u.id}
+                                                        onClick={() => u.role === 'client' ? setSelectedClientHistory(u) : null}
+                                                        className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0 px-2 rounded-xl transition group"
+                                                        style={u.role === 'client' ? { cursor:'pointer' } : {}}
+                                                        onMouseOver={e => u.role === 'client' && (e.currentTarget.style.background='rgba(255,255,255,0.02)')}
+                                                        onMouseOut={e => e.currentTarget.style.background='transparent'}>
+                                                        <div>
+                                                            <p className="font-bold text-sm transition-colors" style={{ color: '#E8E8E8' }}>{u.name}</p>
+                                                            <p className="text-xs mt-0.5" style={{ color: '#888' }}>
+                                                                {u.email} ·{' '}
+                                                                <span className="font-black uppercase text-[9px]" style={{ color: u.role === 'mechanic' ? '#60a5fa' : C }}>
+                                                                    {u.role === 'mechanic' ? 'Mecánico' : 'Cliente'}
+                                                                </span>
+                                                            </p>
+                                                        </div>
+                                                        <button onClick={e => { e.stopPropagation(); handleDeleteUser(u.id); }}
+                                                            className="p-2 rounded-xl transition"
+                                                            style={{ background:'#161616', color:'#555', border:'1px solid #222' }}
+                                                            onMouseOver={e => { e.currentTarget.style.color='#f87171'; e.currentTarget.style.borderColor='rgba(248,113,113,0.3)'; }}
+                                                            onMouseOut={e => { e.currentTarget.style.color='#555'; e.currentTarget.style.borderColor='#222'; }}>
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {selectedClientHistory && (
+                                            <div className="p-6 rounded-2xl animate-fadeIn" style={{ background:'#111', border:`1px solid ${C}40` }}>
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <div>
+                                                        <h4 className="font-black text-lg">{selectedClientHistory.name}</h4>
+                                                        <p className="text-xs" style={{ color:'#888' }}>Historial de contratos activos</p>
+                                                    </div>
+                                                    <button onClick={() => setSelectedClientHistory(null)}
+                                                        className="text-xs px-3 py-1.5 rounded-lg"
+                                                        style={{ background:'#161616', color:'#888', border:'1px solid #222' }}>
+                                                        Cerrar
+                                                    </button>
+                                                </div>
+                                                <div className="space-y-3">
+                                                    {machines.filter(m => m.client_rented_name === selectedClientHistory.name).length === 0 ? (
+                                                        <p className="text-sm italic" style={{ color:'#888' }}>Sin contratos activos.</p>
+                                                    ) : machines.filter(m => m.client_rented_name === selectedClientHistory.name).map(m => (
+                                                        <div key={m.id} className="p-4 rounded-xl flex justify-between items-center"
+                                                            style={{ background:'#161616', border:'1px solid #222' }}>
+                                                            <div>
+                                                                <p className="font-bold">🚜 {m.name}</p>
+                                                                <p className="text-xs mt-0.5" style={{ color:'#888' }}>
+                                                                    {m.rented_from} → {m.rented_to}
+                                                                </p>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <span className="badge-rented block mb-1">Vigente</span>
+                                                                {m.rental_price && <p className="font-black" style={{ color:'#4ade80' }}>${Number(m.rental_price).toLocaleString()} USD</p>}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </>
+                )}
+            </main>
+        </div>
+    );
+}

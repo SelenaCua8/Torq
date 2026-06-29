@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --torq-black:   #0a0a0a;
+    --torq-dark:    #111111;
+    --torq-card:    #161616;
+    --torq-border:  #222222;
+    --torq-muted:   #2a2a2a;
+    --torq-orange:  #F5A623;
+    --torq-orange2: #E8941A;
+    --torq-text:    #E8E8E8;
+    --torq-sub:     #888888;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background-color: var(--torq-black);
+    color: var(--torq-text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Scrollbar personalizada estilo Torq */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--torq-dark); }
+  ::-webkit-scrollbar-thumb { background: var(--torq-border); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--torq-orange); }
+
+  /* Inputs consistentes */
+  input, select, textarea {
+    background-color: var(--torq-dark) !important;
+    border-color: var(--torq-border) !important;
+    color: var(--torq-text) !important;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--torq-orange) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(245,166,35,0.15) !important;
+  }
+}
+
+@layer utilities {
+  .animate-fadeIn {
+    animation: fadeIn 0.25s ease-out both;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Glow naranja Torq */
+  .torq-glow {
+    box-shadow: 0 0 24px rgba(245,166,35,0.18);
+  }
+
+  /* Borde naranja activo */
+  .torq-active {
+    background: var(--torq-orange);
+    color: #0a0a0a;
+    font-weight: 800;
+  }
+
+  /* Sidebar item hover */
+  .nav-item {
+    @apply flex items-center space-x-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150;
+    color: var(--torq-sub);
+  }
+  .nav-item:hover {
+    background: var(--torq-muted);
+    color: var(--torq-text);
+  }
+  .nav-item.active {
+    background: var(--torq-orange);
+    color: #0a0a0a;
+    font-weight: 800;
+  }
+
+  /* Card estándar */
+  .torq-card {
+    background: var(--torq-card);
+    border: 1px solid var(--torq-border);
+    border-radius: 1rem;
+  }
+
+  /* Badge estado */
+  .badge-available {
+    @apply text-emerald-400 bg-emerald-950 border border-emerald-800 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider;
+  }
+  .badge-rented {
+    @apply text-amber-400 bg-amber-950 border border-amber-800 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider;
+  }
+  .badge-propia {
+    @apply text-emerald-400 bg-emerald-950 border border-emerald-800 px-2 py-0.5 rounded text-[10px] font-black uppercase;
+  }
+  .badge-terceros {
+    @apply text-blue-400 bg-blue-950 border border-blue-800 px-2 py-0.5 rounded text-[10px] font-black uppercase;
+  }
+}
