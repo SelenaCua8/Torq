@@ -31,7 +31,7 @@ class CheckMachineService extends Command
         if ($machines->count() > 0) {
             // Buscamos al usuario Administrador para tener su correo
             $admin = User::where('role', 'admin')->first();
-            $emailDestino = $admin ? $admin->email : 'admin@torq.com';
+            $emailDestino = $admin ? $admin->email : env('ADMIN_NOTIFICATION_EMAIL', 'admin@torq.com');
 
             // Enviamos el correo
             Mail::to($emailDestino)->send(new ServiceAlertMail($machines));

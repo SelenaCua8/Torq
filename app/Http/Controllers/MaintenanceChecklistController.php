@@ -35,7 +35,7 @@ class MaintenanceChecklistController extends Controller
         try {
             $machine = Machine::find($validated['machine_id']);
             $mechanicName = DB::table('users')->where('id', $userId)->value('name') ?? 'Operario Técnico';
-            Mail::to('admin1@torq.com')->send(new ServiceCompleted($machine, $mechanicName));
+            Mail::to(env('ADMIN_NOTIFICATION_EMAIL', 'admin@torq.com'))->send(new ServiceCompleted($machine, $mechanicName));
         } catch (\Exception $e) {
             \Log::error('Fallo al enviar correo: ' . $e->getMessage());
         }

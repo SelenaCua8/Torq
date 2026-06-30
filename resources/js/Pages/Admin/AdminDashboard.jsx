@@ -4,7 +4,7 @@ import {
     LayoutDashboard, Car, AlertTriangle,
     CheckCircle, Clock, BarChart3, Wrench, Users,
     LogOut, Trash2, UserPlus, Building2, TrendingUp, DollarSign,
-    History, Calendar, Info, Pencil, ChevronRight, Activity
+    History, Calendar, Info, Pencil, ChevronRight, Activity, Send
 } from 'lucide-react';
 import api from '../../Services/api';
 import MachineForm from '../../Components/MachineForm';
@@ -40,6 +40,12 @@ export default function AdminDashboard() {
     });
     const [maintenanceHistory, setMaintenanceHistory]         = useState([]);
     const [selectedChecklistDetails, setSelectedChecklistDetails] = useState(null);
+    const [showRentalForm, setShowRentalForm]   = useState(false);
+    const [sendingReport, setSendingReport]     = useState(false);
+    const [rentalForm, setRentalForm]           = useState({
+        client_id: '', start_date: '', end_date: '',
+        price: '', price_per_hour: '', payment_type: 'monthly_advance'
+    });
 
     const fetchMachines = async () => {
         try {
@@ -112,6 +118,55 @@ export default function AdminDashboard() {
                 fetchMachines();
                 if (selectedMachineMaster?.id === id) setSelectedMachineMaster(null);
             } catch { alert('Error al eliminar la máquina.'); }
+        }
+    };
+
+    const handleAssignRental = async (e) => {
+        e.preventDefault();
+        try {
+            await api.post('/rentals', {
+                machine_id: selectedMachineMaster.id,
+                client_id: rentalForm.client_id,
+                start_date: rentalForm.start_date,
+                end_date: rentalForm.end_date || null,
+                price: rentalForm.price || null,
+                price_per_hour: rentalForm.price_per_hour || null,
+                payment_type: rentalForm.payment_type,
+            });
+            alert('¡Alquiler asignado correctamente!');
+            setShowRentalForm(false);
+            setRentalForm({ client_id: '', start_date: '', end_date: '', price: '', price_per_hour: '', payment_type: 'monthly_advance' });
+            await fetchMachines();
+            // Refrescar la máquina seleccionada con los datos actualizados
+            const res = await api.get('/machines');
+            const updated = res.data.machines.find(m => m.id === selectedMachineMaster.id);
+            if (updated) setSelectedMachineMaster(updated);
+        } catch (err) {
+            alert(err.response?.data?.message || 'Error al asignar el alquiler.');
+        }
+    };
+
+    const handleEndRental = async (rentalId) => {
+        if (!rentalId) { alert('No se encontró el contrato activo.'); return; }
+        if (confirm('¿Seguro que querés finalizar este contrato? La máquina volverá a estar disponible.')) {
+            try {
+                await api.delete(`/rentals/${rentalId}`);
+                alert('Contrato finalizado.');
+                await fetchMachines();
+                setSelectedMachineMaster(null);
+            } catch { alert('Error al finalizar el contrato.'); }
+        }
+    };
+
+    const handleSendReport = async () => {
+        setSendingReport(true);
+        try {
+            const res = await api.post('/reports/monthly/send');
+            alert(res.data.message || 'Reporte enviado correctamente.');
+        } catch (err) {
+            alert(err.response?.data?.message || 'Error al enviar el reporte por mail.');
+        } finally {
+            setSendingReport(false);
         }
     };
 
@@ -216,30 +271,109 @@ export default function AdminDashboard() {
                             </div>
                         </div>
 
-                        {/* Contrato activo */}
+                        {/* Contrato activo / Asignar alquiler */}
                         <div className="p-6 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
                             <h3 className="font-black text-sm flex items-center gap-2 pb-3 mb-4" style={{ borderBottom: '1px solid #222' }}>
                                 <Calendar className="w-4 h-4" style={{ color: C }} /> Contrato Activo
                             </h3>
                             {selectedMachineMaster.status === 'rented' ? (
-                                <div className="grid grid-cols-3 gap-6">
-                                    <div>
-                                        <p className="text-[10px] uppercase font-black mb-1" style={{ color: '#888' }}>Cliente</p>
-                                        <p className="font-bold">{selectedMachineMaster.client_rented_name}</p>
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-3 gap-6">
+                                        <div>
+                                            <p className="text-[10px] uppercase font-black mb-1" style={{ color: '#888' }}>Cliente</p>
+                                            <p className="font-bold">{selectedMachineMaster.client_rented_name}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] uppercase font-black mb-1" style={{ color: '#888' }}>Período</p>
+                                            <p className="text-sm">{selectedMachineMaster.rented_from} → {selectedMachineMaster.rented_to || 'Sin definir'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] uppercase font-black mb-1" style={{ color: '#888' }}>Valor del Contrato</p>
+                                            <p className="font-black text-lg" style={{ color: '#4ade80' }}>
+                                                ${selectedMachineMaster.rental_price ? Number(selectedMachineMaster.rental_price).toLocaleString() : '—'} USD
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-[10px] uppercase font-black mb-1" style={{ color: '#888' }}>Período</p>
-                                        <p className="text-sm">{selectedMachineMaster.rented_from} → {selectedMachineMaster.rented_to}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] uppercase font-black mb-1" style={{ color: '#888' }}>Valor del Contrato</p>
-                                        <p className="font-black text-lg" style={{ color: '#4ade80' }}>
-                                            ${selectedMachineMaster.rental_price ? Number(selectedMachineMaster.rental_price).toLocaleString() : '—'} USD
-                                        </p>
-                                    </div>
+                                    <button onClick={() => handleEndRental(selectedMachineMaster.rental_id)}
+                                        className="text-xs font-bold px-4 py-2 rounded-xl transition"
+                                        style={{ background: 'rgba(248,113,113,0.08)', color: '#f87171', border: '1px solid rgba(248,113,113,0.25)' }}>
+                                        Finalizar Contrato y Liberar Máquina
+                                    </button>
                                 </div>
+                            ) : showRentalForm ? (
+                                <form onSubmit={handleAssignRental} className="space-y-4 animate-fadeIn">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Cliente</label>
+                                            <select required value={rentalForm.client_id}
+                                                onChange={e => setRentalForm({...rentalForm, client_id: e.target.value})}
+                                                className="block w-full rounded-xl text-sm px-3 py-2.5">
+                                                <option value="">Seleccionar cliente...</option>
+                                                {users.filter(u => u.role === 'client').map(c => (
+                                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Forma de pago</label>
+                                            <select value={rentalForm.payment_type}
+                                                onChange={e => setRentalForm({...rentalForm, payment_type: e.target.value})}
+                                                className="block w-full rounded-xl text-sm px-3 py-2.5">
+                                                <option value="monthly_advance">Mensual adelantado</option>
+                                                <option value="monthly_expired">Mensual vencido</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Fecha de inicio</label>
+                                            <input type="date" required value={rentalForm.start_date}
+                                                onChange={e => setRentalForm({...rentalForm, start_date: e.target.value})}
+                                                className="block w-full rounded-xl text-sm px-3 py-2.5" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Fecha de fin (opcional)</label>
+                                            <input type="date" value={rentalForm.end_date}
+                                                onChange={e => setRentalForm({...rentalForm, end_date: e.target.value})}
+                                                className="block w-full rounded-xl text-sm px-3 py-2.5" />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Valor total del contrato (USD)</label>
+                                            <input type="number" min="0" step="0.01" value={rentalForm.price}
+                                                onChange={e => setRentalForm({...rentalForm, price: e.target.value})}
+                                                className="block w-full rounded-xl text-sm px-3 py-2.5" placeholder="Ej: 14400" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Tarifa por hora (USD)</label>
+                                            <input type="number" min="0" step="0.01" value={rentalForm.price_per_hour}
+                                                onChange={e => setRentalForm({...rentalForm, price_per_hour: e.target.value})}
+                                                className="block w-full rounded-xl text-sm px-3 py-2.5" placeholder="Ej: 120" />
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2 pt-2">
+                                        <button type="button" onClick={() => setShowRentalForm(false)}
+                                            className="px-4 py-2.5 rounded-xl text-xs font-bold transition"
+                                            style={{ background: '#1a1a1a', color: '#888', border: '1px solid #2a2a2a' }}>
+                                            Cancelar
+                                        </button>
+                                        <button type="submit"
+                                            className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition"
+                                            style={{ background: C, color: '#0a0a0a' }}>
+                                            Confirmar Asignación
+                                        </button>
+                                    </div>
+                                </form>
                             ) : (
-                                <p className="text-xs italic" style={{ color: '#666' }}>No hay contrato activo. La máquina está disponible en base.</p>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs italic" style={{ color: '#666' }}>No hay contrato activo. La máquina está disponible en base.</p>
+                                    <button onClick={() => setShowRentalForm(true)}
+                                        className="text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition"
+                                        style={{ background: C, color: '#0a0a0a' }}>
+                                        + Asignar Alquiler
+                                    </button>
+                                </div>
                             )}
                         </div>
 
@@ -317,9 +451,23 @@ export default function AdminDashboard() {
                         {/* ─── TAB: OVERVIEW ─── */}
                         {activeTab === 'overview' && (
                             <div className="space-y-7 animate-fadeIn">
-                                <div>
-                                    <h1 className="text-3xl font-black tracking-tight">Panel de Control</h1>
-                                    <p className="text-sm mt-1" style={{ color: '#888' }}>Clic en cualquier máquina para ver su ficha técnica completa.</p>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h1 className="text-3xl font-black tracking-tight">Panel de Control</h1>
+                                        <p className="text-sm mt-1" style={{ color: '#888' }}>Clic en cualquier máquina para ver su ficha técnica completa.</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <a href="/reports/monthly/download"
+                                            className="flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl transition"
+                                            style={{ background: '#161616', color: '#888', border: '1px solid #222' }}>
+                                            <FileText className="w-4 h-4" /> Descargar Reporte
+                                        </a>
+                                        <button onClick={handleSendReport} disabled={sendingReport}
+                                            className="flex items-center gap-2 text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition"
+                                            style={{ background: C, color: '#0a0a0a' }}>
+                                            <Send className="w-4 h-4" /> {sendingReport ? 'Enviando...' : 'Enviar por Mail'}
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Stats */}

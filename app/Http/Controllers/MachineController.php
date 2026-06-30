@@ -37,6 +37,7 @@ class MachineController extends Controller
 
             if ($rental) {
                 $machine->status            = 'rented';
+                $machine->rental_id          = $rental->id;
                 $machine->client_rented_name = $rental->client_name;
                 $machine->rented_from        = $rental->start_date;
                 $machine->rented_to          = $rental->end_date;

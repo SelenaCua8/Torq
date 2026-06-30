@@ -32,7 +32,7 @@ class RentalQuoteController extends Controller
                 Destino de la obra: {$data['location']}
                 Notas del cliente: {$data['notes']}
             ", function ($message) use ($data) {
-                $message->to('admin@torq.com') // Acá va el correo de tu administrador
+                $message->to(env('ADMIN_NOTIFICATION_EMAIL', 'admin@torq.com')) // Mail del admin, configurable en .env
                         ->subject("Solicitud de Presupuesto: {$data['machine_name']} - {$data['client_name']}");
             });
 

@@ -5,6 +5,8 @@ use App\Http\Controllers\MaintenanceChecklistController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\RentalQuoteController;
+use App\Http\Controllers\RentalController;
+use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -47,6 +49,14 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/users',   [UserController::class, 'index']);
     Route::post('/users',  [UserController::class, 'store']);
     Route::delete('/users/{id}', [UserController::class, 'destroy']);
+
+    // Alquileres — el admin asigna máquinas a clientes
+    Route::post('/rentals', [RentalController::class, 'store']);
+    Route::delete('/rentals/{id}', [RentalController::class, 'destroy']);
+
+    // Reportes mensuales — descarga PDF y envío manual por mail
+    Route::get('/reports/monthly/download', [ReportController::class, 'download']);
+    Route::post('/reports/monthly/send', [ReportController::class, 'sendByMail']);
 
     // Cotizaciones (cliente → admin por mail)
     Route::post('/request-quote', [RentalQuoteController::class, 'store']);
