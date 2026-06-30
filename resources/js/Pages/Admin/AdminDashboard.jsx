@@ -4,7 +4,7 @@ import {
     LayoutDashboard, Car, AlertTriangle,
     CheckCircle, Clock, BarChart3, Wrench, Users,
     LogOut, Trash2, UserPlus, Building2, TrendingUp, DollarSign,
-    History, Calendar, Info, Pencil, ChevronRight, Activity, Send
+   History, Calendar, Info, Pencil, ChevronRight, Activity, Send, FileText
 } from 'lucide-react';
 import api from '../../Services/api';
 import MachineForm from '../../Components/MachineForm';
