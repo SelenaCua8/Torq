@@ -1,0 +1,6 @@
+      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND
+     1788    1780    1780      15352  cons0     197609 14:56:30 /d/xampp/php/php
+     1780    1197    1780      11668  cons0     197609 14:56:30 /usr/bin/sh
+     1197       1    1197      14116  cons0     197609 14:33:18 /usr/bin/bash
+     1954    1198    1954      11480  cons1     197609 14:56:40 /usr/bin/PS
+     1198       1    1198       7136  cons1     197609 14:33:18 /usr/bin/bash
