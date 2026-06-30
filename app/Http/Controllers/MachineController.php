@@ -25,7 +25,7 @@ class MachineController extends Controller
             )
             ->where(function ($q) {
                 $q->whereNull('rentals.end_date')
-                  ->orWhere('rentals.end_date', '>=', now()->toDateString());
+                  ->orWhere('rentals.end_date', '>', now()->toDateString());
             })
             ->get();
 
