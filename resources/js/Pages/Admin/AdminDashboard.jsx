@@ -151,7 +151,7 @@ export default function AdminDashboard() {
         }
     };
 
-    const handleEndRental = async (rentalId) => {
+   const handleEndRental = async (rentalId) => {
     if (!rentalId) { alert('No se encontró el contrato activo.'); return; }
     if (confirm('¿Seguro que querés finalizar este contrato? La máquina volverá a estar disponible.')) {
         try {
