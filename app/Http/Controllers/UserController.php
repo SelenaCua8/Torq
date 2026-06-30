@@ -14,7 +14,7 @@ class UserController extends Controller
     public function index()
     {
         $users = User::where('role', '!=', 'admin')
-                     ->select('id', 'name', 'email', 'role', 'created_at')
+                     ->select('id', 'name', 'username', 'email', 'role', 'created_at')
                      ->orderBy('role')
                      ->orderBy('name')
                      ->get();
@@ -24,12 +24,14 @@ class UserController extends Controller
 
     /**
      * Crea un nuevo usuario (mecánico o cliente) desde el panel del admin.
+     * Se loguean con un usuario/apodo, sin necesidad de un mail real.
      */
     public function store(Request $request)
     {
         $validated = $request->validate([
             'name'          => 'required|string|max:255',
-            'email'         => 'required|string|email|max:255|unique:users',
+            'username'      => 'required|string|max:50|alpha_dash|unique:users,username',
+            'email'         => 'nullable|string|email|max:255|unique:users,email',
             'password'      => 'required|string|min:6',
             'role'          => 'required|in:mechanic,client',
             'phone'         => 'nullable|string|max:50',
@@ -39,14 +41,15 @@ class UserController extends Controller
 
         $user = User::create([
             'name'     => $validated['name'],
-            'email'    => $validated['email'],
+            'username' => $validated['username'],
+            'email'    => $validated['email'] ?? null,
             'password' => Hash::make($validated['password']),
             'role'     => $validated['role'],
         ]);
 
         return response()->json([
             'message' => 'Usuario creado con éxito.',
-            'user'    => $user->only('id', 'name', 'email', 'role')
+            'user'    => $user->only('id', 'name', 'username', 'role')
         ], 201);
     }
 
