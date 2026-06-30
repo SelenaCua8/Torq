@@ -4,7 +4,7 @@ import {
     LayoutDashboard, Car, AlertTriangle,
     CheckCircle, Clock, BarChart3, Wrench, Users,
     LogOut, Trash2, UserPlus, Building2, TrendingUp, DollarSign,
-   History, Calendar, Info, Pencil, ChevronRight, Activity, Send, FileText
+    History, Calendar, Info, Pencil, ChevronRight, Activity, Send, FileText
 } from 'lucide-react';
 import api from '../../Services/api';
 import MachineForm from '../../Components/MachineForm';
@@ -92,16 +92,21 @@ export default function AdminDashboard() {
         try {
             const payload = {
                 role: newUser.role,
-                email: newUser.email,
+                username: newUser.username,
+                email: newUser.email || null,
                 password: newUser.password,
                 name: newUser.role === 'mechanic' ? `${newUser.first_name} ${newUser.last_name}` : newUser.company_name,
                 phone: newUser.phone, cuit: newUser.cuit, business_name: newUser.business_name,
             };
             await api.post('/users', payload);
-            alert(`¡Éxito! Usuario ${payload.name} registrado.`);
+            alert(`¡Éxito! Usuario ${payload.name} registrado. Usuario de acceso: ${payload.username}`);
             fetchUsers();
             setNewUser({ role: 'client', email: '', password: '', username: '', first_name: '', last_name: '', phone: '', company_name: '', cuit: '', business_name: '' });
-        } catch (e) { console.error(e); alert('Error al registrar el usuario. Revisá la consola.'); }
+        } catch (err) {
+            const msg = err.response?.data?.errors?.username?.[0] || 'Error al registrar el usuario. Revisá la consola.';
+            console.error(err);
+            alert(msg);
+        }
     };
 
     const handleDeleteUser = async (id) => {
@@ -703,8 +708,15 @@ export default function AdminDashboard() {
 
                                         <div className="space-y-3 pt-1" style={{ borderTop: '1px solid #222' }}>
                                             <div>
-                                                <label className="block text-[10px] font-black uppercase mb-1.5" style={{ color: '#888' }}>Email</label>
-                                                <input type="email" required value={newUser.email}
+                                                <label className="block text-[10px] font-black uppercase mb-1.5" style={{ color: '#888' }}>Usuario (para iniciar sesión)</label>
+                                                <input type="text" required value={newUser.username}
+                                                    onChange={e => setNewUser({...newUser, username: e.target.value.toLowerCase().replace(/\s+/g, '_')})}
+                                                    className="block w-full rounded-xl text-sm px-3 py-2" placeholder="ej: jperez o constructora_sur" />
+                                                <p className="text-[10px] mt-1" style={{ color: '#555' }}>Sin espacios. Esto es lo que la persona va a usar para loguearse.</p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-black uppercase mb-1.5" style={{ color: '#888' }}>Email (opcional)</label>
+                                                <input type="email" value={newUser.email}
                                                     onChange={e => setNewUser({...newUser, email: e.target.value})}
                                                     className="block w-full rounded-xl text-sm px-3 py-2" placeholder="correo@empresa.com" />
                                             </div>
@@ -740,7 +752,7 @@ export default function AdminDashboard() {
                                                         <div>
                                                             <p className="font-bold text-sm transition-colors" style={{ color: '#E8E8E8' }}>{u.name}</p>
                                                             <p className="text-xs mt-0.5" style={{ color: '#888' }}>
-                                                                {u.email} ·{' '}
+                                                                @{u.username} ·{' '}
                                                                 <span className="font-black uppercase text-[9px]" style={{ color: u.role === 'mechanic' ? '#60a5fa' : C }}>
                                                                     {u.role === 'mechanic' ? 'Mecánico' : 'Cliente'}
                                                                 </span>
