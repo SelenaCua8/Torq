@@ -47,6 +47,9 @@ export default function AdminDashboard() {
         client_id: '', start_date: '', end_date: '',
         price: '', price_per_hour: '', payment_type: 'monthly_advance'
     });
+    const [quotes, setQuotes]               = useState([]);
+const [unreadQuotes, setUnreadQuotes]   = useState(0);
+const [sidebarOpen, setSidebarOpen]     = useState(false);
 
     const fetchMachines = async () => {
         try {
@@ -216,9 +219,7 @@ export default function AdminDashboard() {
     ];
 
 
-    const [quotes, setQuotes]               = useState([]);
-    const [unreadQuotes, setUnreadQuotes]   = useState(0);
-    const [sidebarOpen, setSidebarOpen]     = useState(false);
+   
 
     const handleTabChange = (id) => {
         setActiveTab(id);
