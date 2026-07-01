@@ -47,9 +47,10 @@ export default function AdminDashboard() {
         client_id: '', start_date: '', end_date: '',
         price: '', price_per_hour: '', payment_type: 'monthly_advance'
     });
-    const [quotes, setQuotes]               = useState([]);
-const [unreadQuotes, setUnreadQuotes]   = useState(0);
-const [sidebarOpen, setSidebarOpen]     = useState(false);
+    const [quotes, setQuotes]                   = useState([]);
+    const [unreadQuotes, setUnreadQuotes]       = useState(0);
+    const [technicalReports, setTechnicalReports] = useState([]);
+    const [sidebarOpen, setSidebarOpen]         = useState(false);
 
     const fetchMachines = async () => {
         try {
@@ -95,7 +96,14 @@ const [sidebarOpen, setSidebarOpen]     = useState(false);
         } catch (e) { console.error(e); }
     };
 
-    useEffect(() => { fetchMachines(); fetchUsers(); fetchQuotes(); }, [salesPeriod]);
+    const fetchTechnicalReports = async () => {
+        try {
+            const res = await api.get('/maintenance-checklists/all');
+            setTechnicalReports(res.data || []);
+        } catch (e) { console.error(e); }
+    };
+
+    useEffect(() => { fetchMachines(); fetchUsers(); fetchQuotes(); fetchTechnicalReports(); }, [salesPeriod]);
 
     const handleLogout = () => router.post('/logout');
 
@@ -215,11 +223,10 @@ const [sidebarOpen, setSidebarOpen]     = useState(false);
         { id: 'overview',    label: 'Panel de Control', icon: LayoutDashboard },
         { id: 'analytics',   label: 'Analíticas',       icon: BarChart3 },
         { id: 'solicitudes', label: 'Solicitudes',      icon: FileText, badge: unreadQuotes },
+        { id: 'reportes',    label: 'Reportes Técnicos', icon: Wrench },
         { id: 'users',       label: 'Usuarios',         icon: Users },
     ];
 
-
-   
 
     const handleTabChange = (id) => {
         setActiveTab(id);
@@ -748,6 +755,79 @@ const [sidebarOpen, setSidebarOpen]     = useState(false);
                                                 </div>
                                             </div>
                                         ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* TAB: REPORTES TÉCNICOS */}
+                        {activeTab === 'reportes' && (
+                            <div className="space-y-5 animate-fadeIn">
+                                <div>
+                                    <h2 className="text-2xl font-black">Reportes Técnicos</h2>
+                                    <p className="text-xs mt-1" style={{ color: '#888' }}>
+                                        Todos los controles de mantenimiento realizados por los mecánicos.
+                                    </p>
+                                </div>
+
+                                {technicalReports.length === 0 ? (
+                                    <div className="py-16 rounded-2xl text-center" style={{ background: '#111', border: '1px solid #222' }}>
+                                        <Wrench className="w-10 h-10 mx-auto mb-3" style={{ color: '#333' }} />
+                                        <p style={{ color: '#888' }}>No hay reportes técnicos todavía.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {technicalReports.map(r => {
+                                            const estadoColor = r.estado_general === 'OK' ? '#4ade80'
+                                                : r.estado_general === 'Con observaciones' ? C
+                                                : '#f87171';
+                                            const estadoBg = r.estado_general === 'OK' ? 'rgba(74,222,128,0.08)'
+                                                : r.estado_general === 'Con observaciones' ? 'rgba(245,166,35,0.08)'
+                                                : 'rgba(248,113,113,0.08)';
+                                            return (
+                                                <div key={r.id} className="p-4 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
+                                                    <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                                <h3 className="font-black text-sm">{r.machine_name}</h3>
+                                                                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded"
+                                                                    style={{ color: estadoColor, background: estadoBg, border: `1px solid ${estadoColor}33` }}>
+                                                                    {r.estado_general}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs mb-3" style={{ color: '#888' }}>
+                                                                S/N: {r.serial_number} · Mecánico: <strong style={{ color: '#ccc' }}>{r.mechanic_name}</strong>
+                                                            </p>
+                                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                                                <div className="p-2 rounded-xl" style={{ background: '#161616', border: '1px solid #1e1e1e' }}>
+                                                                    <p className="text-[9px] uppercase font-black mb-0.5" style={{ color: '#555' }}>Fecha</p>
+                                                                    <p style={{ color: '#ccc' }}>{new Date(r.created_at).toLocaleDateString('es-AR')}</p>
+                                                                </div>
+                                                                <div className="p-2 rounded-xl" style={{ background: '#161616', border: '1px solid #1e1e1e' }}>
+                                                                    <p className="text-[9px] uppercase font-black mb-0.5" style={{ color: '#555' }}>Horómetro</p>
+                                                                    <p style={{ color: '#ccc' }}>{r.current_hours} hs</p>
+                                                                </div>
+                                                                <div className="p-2 rounded-xl" style={{ background: '#161616', border: '1px solid #1e1e1e' }}>
+                                                                    <p className="text-[9px] uppercase font-black mb-0.5" style={{ color: '#555' }}>Ítems con obs.</p>
+                                                                    <p style={{ color: r.no_apto_count > 0 ? '#f87171' : '#4ade80', fontWeight: 'bold' }}>
+                                                                        {r.no_apto_count === 0 ? 'Ninguno' : `${r.no_apto_count} ítem${r.no_apto_count > 1 ? 's' : ''}`}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="p-2 rounded-xl" style={{ background: '#161616', border: '1px solid #1e1e1e' }}>
+                                                                    <p className="text-[9px] uppercase font-black mb-0.5" style={{ color: '#555' }}>ID</p>
+                                                                    <p style={{ color: '#888' }}>CERT-{r.id}</p>
+                                                                </div>
+                                                            </div>
+                                                            {r.general_observations && (
+                                                                <p className="text-xs mt-2 italic" style={{ color: '#666' }}>
+                                                                    "{r.general_observations}"
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>

@@ -44,6 +44,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/maintenance-checklists',              [MaintenanceChecklistController::class, 'store']);
     Route::post('/maintenance-logs',                    [MaintenanceChecklistController::class, 'store']);
     Route::get('/maintenance-checklists/machine/{id}',  [MaintenanceChecklistController::class, 'getHistory']);
+    Route::get('/maintenance-checklists/all',           [MaintenanceChecklistController::class, 'getAllReports']);
 
     // Usuarios
     Route::get('/users',   [UserController::class, 'index']);

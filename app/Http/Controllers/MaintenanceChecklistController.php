@@ -57,4 +57,38 @@ class MaintenanceChecklistController extends Controller
         }
         return response()->json($history, 200);
     }
+
+    /**
+     * Todos los reportes técnicos para el dashboard del admin.
+     */
+    public function getAllReports()
+    {
+        $reports = DB::table('maintenance_checklists')
+            ->join('users', 'maintenance_checklists.user_id', '=', 'users.id')
+            ->join('machines', 'maintenance_checklists.machine_id', '=', 'machines.id')
+            ->select(
+                'maintenance_checklists.id',
+                'maintenance_checklists.general_observations',
+                'maintenance_checklists.inspections',
+                'maintenance_checklists.created_at',
+                'users.name as mechanic_name',
+                'machines.name as machine_name',
+                'machines.serial_number',
+                'machines.current_hours'
+            )
+            ->orderByDesc('maintenance_checklists.created_at')
+            ->get()
+            ->map(function ($r) {
+                // Calcular cuántos ítems no están "Apto"
+                $inspections = is_string($r->inspections) ? json_decode($r->inspections, true) : (array)$r->inspections;
+                $items = array_values($inspections ?: []);
+                $noApto = count(array_filter($items, fn($i) => ($i['status'] ?? '') !== 'Apto'));
+                $r->no_apto_count = $noApto;
+                $r->estado_general = $noApto === 0 ? 'OK' : ($noApto <= 2 ? 'Con observaciones' : 'Requiere atención');
+                unset($r->inspections); // No mandamos todos los detalles en el listado
+                return $r;
+            });
+
+        return response()->json($reports, 200);
+    }
 }
