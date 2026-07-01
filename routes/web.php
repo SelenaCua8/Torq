@@ -60,6 +60,9 @@ Route::middleware(['auth'])->group(function () {
 
     // Cotizaciones (cliente → admin por mail)
     Route::post('/request-quote', [RentalQuoteController::class, 'store']);
+    Route::get('/quote-requests', [RentalQuoteController::class, 'index']);
+    Route::patch('/quote-requests/{id}/toggle-read', [RentalQuoteController::class, 'toggleRead']);
+    Route::delete('/quote-requests/{id}', [RentalQuoteController::class, 'destroy']);
 });
 
 require __DIR__.'/auth.php';

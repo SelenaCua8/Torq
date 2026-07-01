@@ -4,7 +4,8 @@ import {
     LayoutDashboard, Car, AlertTriangle,
     CheckCircle, Clock, BarChart3, Wrench, Users,
     LogOut, Trash2, UserPlus, Building2, TrendingUp, DollarSign,
-    History, Calendar, Info, Pencil, ChevronRight, Activity, Send, FileText
+    History, Calendar, Info, Pencil, ChevronRight, Activity, Send, FileText,
+    Menu, X
 } from 'lucide-react';
 import api from '../../Services/api';
 import MachineForm from '../../Components/MachineForm';
@@ -83,7 +84,15 @@ export default function AdminDashboard() {
         } catch { setUsers([]); }
     };
 
-    useEffect(() => { fetchMachines(); fetchUsers(); }, [salesPeriod]);
+    const fetchQuotes = async () => {
+        try {
+            const res = await api.get('/quote-requests');
+            setQuotes(res.data.quotes || []);
+            setUnreadQuotes(res.data.unread || 0);
+        } catch (e) { console.error(e); }
+    };
+
+    useEffect(() => { fetchMachines(); fetchUsers(); fetchQuotes(); }, [salesPeriod]);
 
     const handleLogout = () => router.post('/logout');
 
@@ -151,18 +160,19 @@ export default function AdminDashboard() {
         }
     };
 
-   const handleEndRental = async (rentalId) => {
-    if (!rentalId) { alert('No se encontró el contrato activo.'); return; }
-    if (confirm('¿Seguro que querés finalizar este contrato? La máquina volverá a estar disponible.')) {
-        try {
-            await api.delete(`/rentals/${rentalId}`);
-            alert('Contrato finalizado. La máquina vuelve a estar disponible.');
-            setSelectedMachineMaster(null);
-            setSelectedChecklistDetails(null);
-            setTimeout(() => fetchMachines(), 300);
-        } catch { alert('Error al finalizar el contrato.'); }
-    }
-};
+    const handleEndRental = async (rentalId) => {
+        if (!rentalId) { alert('No se encontró el contrato activo.'); return; }
+        if (confirm('¿Seguro que querés finalizar este contrato? La máquina volverá a estar disponible.')) {
+            try {
+                await api.delete(`/rentals/${rentalId}`);
+                alert('Contrato finalizado. La máquina vuelve a estar disponible.');
+                setSelectedMachineMaster(null);
+                setSelectedChecklistDetails(null);
+                // Esperar un tick y luego refrescar para que el backend actualice el estado
+                setTimeout(() => fetchMachines(), 300);
+            } catch { alert('Error al finalizar el contrato.'); }
+        }
+    };
 
     const handleSendReport = async () => {
         setSendingReport(true);
@@ -176,6 +186,20 @@ export default function AdminDashboard() {
         }
     };
 
+    const handleToggleRead = async (id) => {
+        try {
+            await api.patch(`/quote-requests/${id}/toggle-read`);
+            fetchQuotes();
+        } catch (e) { console.error(e); }
+    };
+
+    const handleDeleteQuote = async (id) => {
+        if (confirm('¿Eliminar esta solicitud?')) {
+            try { await api.delete(`/quote-requests/${id}`); fetchQuotes(); }
+            catch (e) { console.error(e); }
+        }
+    };
+
     const filteredMachines = machines.filter(m => {
         if (filterType === 'propia') return m.ownership_type === 'propia';
         if (filterType === 'terceros') return m.ownership_type === 'terceros';
@@ -185,30 +209,54 @@ export default function AdminDashboard() {
     });
 
     const navItems = [
-        { id: 'overview',  label: 'Panel de Control', icon: LayoutDashboard },
-        { id: 'analytics', label: 'Analíticas',        icon: BarChart3 },
-        { id: 'users',     label: 'Usuarios',          icon: Users },
+        { id: 'overview',    label: 'Panel de Control', icon: LayoutDashboard },
+        { id: 'analytics',   label: 'Analíticas',       icon: BarChart3 },
+        { id: 'solicitudes', label: 'Solicitudes',      icon: FileText, badge: unreadQuotes },
+        { id: 'users',       label: 'Usuarios',         icon: Users },
     ];
+
+
+    const [quotes, setQuotes]               = useState([]);
+    const [unreadQuotes, setUnreadQuotes]   = useState(0);
+    const [sidebarOpen, setSidebarOpen]     = useState(false);
+
+    const handleTabChange = (id) => {
+        setActiveTab(id);
+        setSelectedMachineMaster(null);
+        setSidebarOpen(false);
+    };
 
     return (
         <div className="flex h-screen font-sans overflow-hidden" style={{ background: '#0a0a0a', color: '#E8E8E8' }}>
 
+            {/* Overlay mobile */}
+            {sidebarOpen && (
+                <div className="fixed inset-0 z-30 bg-black bg-opacity-60 lg:hidden" onClick={() => setSidebarOpen(false)} />
+            )}
+
             {/* SIDEBAR */}
-            <aside className="w-60 flex flex-col justify-between p-5" style={{ background: '#111', borderRight: '1px solid #222' }}>
+            <aside className={`fixed lg:relative z-40 h-full flex flex-col justify-between p-5 transition-transform duration-300
+                ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} w-64 lg:w-60`}
+                style={{ background: '#111', borderRight: '1px solid #222' }}>
                 <div className="space-y-6">
                     <div className="flex flex-col items-center pb-5" style={{ borderBottom: '1px solid #222' }}>
-                        <img src="/images/logo-torq.png" alt="Torq" className="w-36 object-contain" />
+                        <img src="/images/logo-torq.png" alt="Torq" className="w-32 object-contain" />
                     </div>
                     <nav className="space-y-1">
-                        {navItems.map(({ id, label, icon: Icon }) => (
-                            <button key={id}
-                                onClick={() => { setActiveTab(id); setSelectedMachineMaster(null); }}
+                        {navItems.map(({ id, label, icon: Icon, badge }) => (
+                            <button key={id} onClick={() => handleTabChange(id)}
                                 className="flex items-center space-x-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
-                                style={activeTab === id
-                                    ? { background: C, color: '#0a0a0a', fontWeight: 800 }
-                                    : { color: '#888' }}>
+                                style={activeTab === id ? { background: C, color: '#0a0a0a', fontWeight: 800 } : { color: '#888' }}>
                                 <Icon className="w-4 h-4 shrink-0" />
-                                <span>{label}</span>
+                                <span className="flex-1 text-left">{label}</span>
+                                {badge > 0 && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-black"
+                                        style={activeTab === id
+                                            ? { background: 'rgba(0,0,0,0.2)', color: '#0a0a0a' }
+                                            : { background: '#ef4444', color: '#fff' }}>
+                                        {badge}
+                                    </span>
+                                )}
                             </button>
                         ))}
                     </nav>
@@ -227,11 +275,20 @@ export default function AdminDashboard() {
             </aside>
 
             {/* MAIN */}
-            <main className="flex-1 overflow-y-auto p-8">
+            <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Header mobile */}
+                <div className="flex items-center justify-between px-4 py-3 lg:hidden" style={{ background: '#111', borderBottom: '1px solid #222' }}>
+                    <img src="/images/logo-torq.png" alt="Torq" className="h-8 object-contain" />
+                    <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ color: '#888' }}>
+                        {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                    </button>
+                </div>
+
+                <main className="flex-1 overflow-y-auto p-4 md:p-8">
 
                 {/* VISTA DETALLE DE MÁQUINA */}
                 {selectedMachineMaster ? (
-                    <div className="space-y-5 animate-fadeIn">
+                    <div className="space-y-4 animate-fadeIn">
                         <div className="flex justify-between items-center">
                             <button onClick={() => { setSelectedMachineMaster(null); setSelectedChecklistDetails(null); }}
                                 className="text-xs font-bold px-4 py-2 rounded-xl transition"
@@ -243,10 +300,9 @@ export default function AdminDashboard() {
                             </span>
                         </div>
 
-                        {/* Header máquina */}
-                        <div className="p-6 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
-                            <div className="flex items-center gap-3 mb-2">
-                                <h2 className="text-3xl font-black" style={{ color: C }}>{selectedMachineMaster.name}</h2>
+                        <div className="p-5 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
+                            <div className="flex flex-wrap items-center gap-3 mb-2">
+                                <h2 className="text-2xl font-black" style={{ color: C }}>{selectedMachineMaster.name}</h2>
                                 <span className={selectedMachineMaster.ownership_type === 'propia' ? 'badge-propia' : 'badge-terceros'}>
                                     {selectedMachineMaster.ownership_type}
                                 </span>
@@ -254,48 +310,43 @@ export default function AdminDashboard() {
                             <p className="text-xs mb-4" style={{ color: '#888' }}>
                                 Modelo: {selectedMachineMaster.model} · S/N: {selectedMachineMaster.serial_number}
                             </p>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-2 gap-3">
                                 <div className="p-3 rounded-xl flex items-center gap-3" style={{ background: '#161616', border: '1px solid #222' }}>
-                                    <Clock className="w-5 h-5" style={{ color: C }} />
+                                    <Clock className="w-4 h-4 shrink-0" style={{ color: C }} />
                                     <div>
                                         <p className="text-[10px] uppercase font-black" style={{ color: '#888' }}>Horómetro</p>
-                                        <p className="font-black">{selectedMachineMaster.current_hours} hs</p>
+                                        <p className="font-black text-sm">{selectedMachineMaster.current_hours} hs</p>
                                     </div>
                                 </div>
                                 <div className="p-3 rounded-xl flex items-center gap-3" style={{ background: '#161616', border: '1px solid #222' }}>
-                                    <AlertTriangle className={`w-5 h-5 ${selectedMachineMaster.current_hours % 250 >= 220 ? 'text-red-500 animate-pulse' : ''}`}
-                                        style={selectedMachineMaster.current_hours % 250 < 220 ? { color: '#444' } : {}} />
+                                    <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: '#444' }} />
                                     <div>
-                                        <p className="text-[10px] uppercase font-black" style={{ color: '#888' }}>Próximo Service</p>
-                                        <p className="font-black">{Math.ceil((selectedMachineMaster.current_hours + 1) / 250) * 250} hs
-                                            <span className="text-xs font-normal ml-1" style={{ color: '#888' }}>
-                                                ({250 - (selectedMachineMaster.current_hours % 250)} restantes)
-                                            </span>
-                                        </p>
+                                        <p className="text-[10px] uppercase font-black" style={{ color: '#888' }}>Próx. Service</p>
+                                        <p className="font-black text-sm">{250 - (selectedMachineMaster.current_hours % 250)} hs</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Contrato activo / Asignar alquiler */}
-                        <div className="p-6 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
+                        {/* Contrato activo */}
+                        <div className="p-5 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
                             <h3 className="font-black text-sm flex items-center gap-2 pb-3 mb-4" style={{ borderBottom: '1px solid #222' }}>
                                 <Calendar className="w-4 h-4" style={{ color: C }} /> Contrato Activo
                             </h3>
                             {selectedMachineMaster.status === 'rented' ? (
                                 <div className="space-y-4">
-                                    <div className="grid grid-cols-3 gap-6">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                         <div>
                                             <p className="text-[10px] uppercase font-black mb-1" style={{ color: '#888' }}>Cliente</p>
-                                            <p className="font-bold">{selectedMachineMaster.client_rented_name}</p>
+                                            <p className="font-bold text-sm">{selectedMachineMaster.client_rented_name}</p>
                                         </div>
                                         <div>
                                             <p className="text-[10px] uppercase font-black mb-1" style={{ color: '#888' }}>Período</p>
-                                            <p className="text-sm">{selectedMachineMaster.rented_from} → {selectedMachineMaster.rented_to || 'Sin definir'}</p>
+                                            <p className="text-xs">{selectedMachineMaster.rented_from} → {selectedMachineMaster.rented_to || 'Sin definir'}</p>
                                         </div>
                                         <div>
-                                            <p className="text-[10px] uppercase font-black mb-1" style={{ color: '#888' }}>Valor del Contrato</p>
-                                            <p className="font-black text-lg" style={{ color: '#4ade80' }}>
+                                            <p className="text-[10px] uppercase font-black mb-1" style={{ color: '#888' }}>Valor</p>
+                                            <p className="font-black" style={{ color: '#4ade80' }}>
                                                 ${selectedMachineMaster.rental_price ? Number(selectedMachineMaster.rental_price).toLocaleString() : '—'} USD
                                             </p>
                                         </div>
@@ -307,14 +358,14 @@ export default function AdminDashboard() {
                                     </button>
                                 </div>
                             ) : showRentalForm ? (
-                                <form onSubmit={handleAssignRental} className="space-y-4 animate-fadeIn">
-                                    <div className="grid grid-cols-2 gap-4">
+                                <form onSubmit={handleAssignRental} className="space-y-3 animate-fadeIn">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div>
                                             <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Cliente</label>
                                             <select required value={rentalForm.client_id}
                                                 onChange={e => setRentalForm({...rentalForm, client_id: e.target.value})}
                                                 className="block w-full rounded-xl text-sm px-3 py-2.5">
-                                                <option value="">Seleccionar cliente...</option>
+                                                <option value="">Seleccionar...</option>
                                                 {users.filter(u => u.role === 'client').map(c => (
                                                     <option key={c.id} value={c.id}>{c.name}</option>
                                                 ))}
@@ -330,52 +381,48 @@ export default function AdminDashboard() {
                                             </select>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Fecha de inicio</label>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Fecha inicio</label>
                                             <input type="date" required value={rentalForm.start_date}
                                                 onChange={e => setRentalForm({...rentalForm, start_date: e.target.value})}
                                                 className="block w-full rounded-xl text-sm px-3 py-2.5" />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Fecha de fin (opcional)</label>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Fecha fin</label>
                                             <input type="date" value={rentalForm.end_date}
                                                 onChange={e => setRentalForm({...rentalForm, end_date: e.target.value})}
                                                 className="block w-full rounded-xl text-sm px-3 py-2.5" />
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Valor total del contrato (USD)</label>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Valor total (USD)</label>
                                             <input type="number" min="0" step="0.01" value={rentalForm.price}
                                                 onChange={e => setRentalForm({...rentalForm, price: e.target.value})}
                                                 className="block w-full rounded-xl text-sm px-3 py-2.5" placeholder="Ej: 14400" />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Tarifa por hora (USD)</label>
+                                            <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Tarifa/hora (USD)</label>
                                             <input type="number" min="0" step="0.01" value={rentalForm.price_per_hour}
                                                 onChange={e => setRentalForm({...rentalForm, price_per_hour: e.target.value})}
                                                 className="block w-full rounded-xl text-sm px-3 py-2.5" placeholder="Ej: 120" />
                                         </div>
                                     </div>
-                                    <div className="flex gap-2 pt-2">
+                                    <div className="flex gap-2 pt-1">
                                         <button type="button" onClick={() => setShowRentalForm(false)}
-                                            className="px-4 py-2.5 rounded-xl text-xs font-bold transition"
-                                            style={{ background: '#1a1a1a', color: '#888', border: '1px solid #2a2a2a' }}>
-                                            Cancelar
-                                        </button>
+                                            className="px-4 py-2.5 rounded-xl text-xs font-bold"
+                                            style={{ background: '#1a1a1a', color: '#888', border: '1px solid #2a2a2a' }}>Cancelar</button>
                                         <button type="submit"
-                                            className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition"
-                                            style={{ background: C, color: '#0a0a0a' }}>
-                                            Confirmar Asignación
-                                        </button>
+                                            className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider"
+                                            style={{ background: C, color: '#0a0a0a' }}>Confirmar</button>
                                     </div>
                                 </form>
                             ) : (
-                                <div className="flex items-center justify-between">
-                                    <p className="text-xs italic" style={{ color: '#666' }}>No hay contrato activo. La máquina está disponible en base.</p>
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                    <p className="text-xs italic" style={{ color: '#666' }}>No hay contrato activo.</p>
                                     <button onClick={() => setShowRentalForm(true)}
-                                        className="text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition"
+                                        className="text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl"
                                         style={{ background: C, color: '#0a0a0a' }}>
                                         + Asignar Alquiler
                                     </button>
@@ -383,15 +430,15 @@ export default function AdminDashboard() {
                             )}
                         </div>
 
-                        {/* Historial de checklists */}
-                        <div className="p-6 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
+                        {/* Historial checklists */}
+                        <div className="p-5 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
                             <h3 className="font-black text-sm flex items-center gap-2 pb-3 mb-4" style={{ borderBottom: '1px solid #222' }}>
                                 <Wrench className="w-4 h-4" style={{ color: C }} /> Planillas Técnicas
                             </h3>
-                            <div className="grid grid-cols-3 gap-5">
-                                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                            <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4">
+                                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                                     {maintenanceHistory.length === 0 ? (
-                                        <p className="text-xs italic" style={{ color: '#666' }}>Sin planillas registradas.</p>
+                                        <p className="text-xs italic" style={{ color: '#666' }}>Sin planillas.</p>
                                     ) : maintenanceHistory.map(log => (
                                         <div key={log.id} onClick={() => setSelectedChecklistDetails(log)}
                                             className="p-3 rounded-xl text-xs cursor-pointer transition"
@@ -399,25 +446,23 @@ export default function AdminDashboard() {
                                                 ? { background: 'rgba(245,166,35,0.1)', border: `1px solid ${C}` }
                                                 : { background: '#161616', border: '1px solid #222' }}>
                                             <div className="flex justify-between">
-                                                <span className="font-bold" style={selectedChecklistDetails?.id === log.id ? { color: C } : {}}>
-                                                    Control #{log.id}
-                                                </span>
+                                                <span className="font-bold" style={selectedChecklistDetails?.id === log.id ? { color: C } : {}}>Control #{log.id}</span>
                                                 <span style={{ color: '#666' }}>{new Date(log.created_at).toLocaleDateString()}</span>
                                             </div>
                                             <p className="mt-1" style={{ color: '#888' }}>Por: {log.mechanic_name}</p>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="col-span-2 rounded-xl p-4" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
+                                <div className="col-span-2 rounded-xl p-4 min-h-32" style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
                                     {selectedChecklistDetails ? (
-                                        <div className="space-y-3 animate-fadeIn">
+                                        <div className="space-y-2 animate-fadeIn">
                                             <div className="flex justify-between items-center pb-2" style={{ borderBottom: '1px solid #1e1e1e' }}>
                                                 <h4 className="font-black text-sm" style={{ color: C }}>Planilla Oficial</h4>
                                                 <span className="text-[10px] font-black px-2 py-0.5 rounded" style={{ background: '#161616', color: '#888' }}>
                                                     CERT-{selectedChecklistDetails.id}
                                                 </span>
                                             </div>
-                                            <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
+                                            <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
                                                 {selectedChecklistDetails.inspections && (() => {
                                                     let parsed = selectedChecklistDetails.inspections;
                                                     if (typeof parsed === 'string') try { parsed = JSON.parse(parsed); } catch { return null; }
@@ -425,10 +470,10 @@ export default function AdminDashboard() {
                                                     return items.map((item, idx) => {
                                                         const sc = item.status === 'Apto' ? '#4ade80' : item.status === 'No Apto' ? '#f87171' : C;
                                                         return (
-                                                            <div key={idx} className="flex justify-between items-center px-3 py-2 rounded-lg text-xs"
+                                                            <div key={idx} className="flex justify-between items-center px-2 py-1.5 rounded-lg text-xs"
                                                                 style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #1e1e1e' }}>
                                                                 <span style={{ color: '#ccc' }}>{(item.id || idx+1)}. {item.name}</span>
-                                                                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded"
+                                                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded shrink-0"
                                                                     style={{ color: sc, background: `${sc}15`, border: `1px solid ${sc}33` }}>
                                                                     {item.status}
                                                                 </span>
@@ -437,14 +482,14 @@ export default function AdminDashboard() {
                                                     });
                                                 })()}
                                             </div>
-                                            <div className="p-3 rounded-xl text-xs" style={{ background: '#161616', border: '1px solid #222' }}>
+                                            <div className="p-2 rounded-xl text-xs" style={{ background: '#161616', border: '1px solid #222' }}>
                                                 <strong className="block text-[9px] uppercase tracking-widest mb-1" style={{ color: C }}>Diagnóstico:</strong>
                                                 <p className="italic" style={{ color: '#aaa' }}>"{selectedChecklistDetails.general_observations || 'Sin comentarios.'}"</p>
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="h-full flex items-center justify-center text-center py-8">
-                                            <p className="text-xs" style={{ color: '#555' }}>Seleccioná una planilla para ver el detalle.</p>
+                                        <div className="flex items-center justify-center h-full py-4">
+                                            <p className="text-xs" style={{ color: '#555' }}>Seleccioná una planilla.</p>
                                         </div>
                                     )}
                                 </div>
@@ -454,90 +499,88 @@ export default function AdminDashboard() {
 
                 ) : (
                     <>
-                        {/* ─── TAB: OVERVIEW ─── */}
+                        {/* TAB: OVERVIEW */}
                         {activeTab === 'overview' && (
-                            <div className="space-y-7 animate-fadeIn">
-                                <div className="flex items-center justify-between">
+                            <div className="space-y-5 animate-fadeIn">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                     <div>
-                                        <h1 className="text-3xl font-black tracking-tight">Panel de Control</h1>
-                                        <p className="text-sm mt-1" style={{ color: '#888' }}>Clic en cualquier máquina para ver su ficha técnica completa.</p>
+                                        <h1 className="text-2xl md:text-3xl font-black tracking-tight">Panel de Control</h1>
+                                        <p className="text-sm mt-1" style={{ color: '#888' }}>Clic en cualquier máquina para ver su ficha.</p>
                                     </div>
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 flex-wrap">
                                         <a href="/reports/monthly/download"
-                                            className="flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl transition"
+                                            className="flex items-center gap-2 text-xs font-bold px-3 py-2.5 rounded-xl transition"
                                             style={{ background: '#161616', color: '#888', border: '1px solid #222' }}>
-                                            <FileText className="w-4 h-4" /> Descargar Reporte
+                                            <FileText className="w-4 h-4" /> Reporte
                                         </a>
                                         <button onClick={handleSendReport} disabled={sendingReport}
-                                            className="flex items-center gap-2 text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition"
+                                            className="flex items-center gap-2 text-xs font-black uppercase tracking-wider px-3 py-2.5 rounded-xl transition"
                                             style={{ background: C, color: '#0a0a0a' }}>
-                                            <Send className="w-4 h-4" /> {sendingReport ? 'Enviando...' : 'Enviar por Mail'}
+                                            <Send className="w-4 h-4" /> {sendingReport ? 'Enviando...' : 'Mail'}
                                         </button>
                                     </div>
                                 </div>
 
-                                {/* Stats */}
-                                <div className="grid grid-cols-5 gap-4">
-                                    <StatCard label="Total Flota"   value={stats.total}       icon={Car}          active={filterType==='all'}       onClick={() => setFilterType('all')} />
-                                    <StatCard label="Flota Propia"  value={stats.propias}     icon={CheckCircle}  color="#4ade80" active={filterType==='propia'}    onClick={() => setFilterType('propia')} />
-                                    <StatCard label="Terceros"      value={stats.terceros}    icon={Building2}    color="#60a5fa" active={filterType==='terceros'}  onClick={() => setFilterType('terceros')} />
-                                    <StatCard label="Disponibles"   value={stats.disponibles} icon={CheckCircle}  color="#34d399" active={filterType==='available'} onClick={() => setFilterType('available')} />
-                                    <StatCard label="Alquiladas"    value={stats.alquiladas}  icon={Clock}        color={C}       active={filterType==='rented'}    onClick={() => setFilterType('rented')} />
+                                {/* Stats — scroll horizontal en mobile */}
+                                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 md:gap-4">
+                                    <StatCard label="Total"       value={stats.total}       icon={Car}         active={filterType==='all'}       onClick={() => setFilterType('all')} />
+                                    <StatCard label="Propia"      value={stats.propias}     icon={CheckCircle} color="#4ade80" active={filterType==='propia'}    onClick={() => setFilterType('propia')} />
+                                    <StatCard label="Terceros"    value={stats.terceros}    icon={Building2}   color="#60a5fa" active={filterType==='terceros'}  onClick={() => setFilterType('terceros')} />
+                                    <StatCard label="Disponibles" value={stats.disponibles} icon={CheckCircle} color="#34d399" active={filterType==='available'} onClick={() => setFilterType('available')} />
+                                    <StatCard label="Alquiladas"  value={stats.alquiladas}  icon={Clock}       color={C}       active={filterType==='rented'}    onClick={() => setFilterType('rented')} />
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-6">
-                                    <div className="col-span-1">
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                                    <div className="lg:col-span-1">
                                         <MachineForm onMachineAdded={fetchMachines} />
                                     </div>
-
-                                    <div className="col-span-2 rounded-2xl p-6" style={{ background: '#111', border: '1px solid #222' }}>
+                                    <div className="lg:col-span-2 rounded-2xl p-5" style={{ background: '#111', border: '1px solid #222' }}>
                                         <div className="flex justify-between items-center pb-3 mb-4" style={{ borderBottom: '1px solid #222' }}>
                                             <h3 className="font-black">Monitoreo de Flota</h3>
                                             <span className="text-[10px] uppercase font-black px-2 py-1 rounded" style={{ background: '#161616', color: '#888', border: '1px solid #222' }}>
-                                                Filtro: {filterType}
+                                                {filterType}
                                             </span>
                                         </div>
-                                        <div className="divide-y overflow-y-auto max-h-[440px] pr-1" style={{ borderColor: '#1e1e1e' }}>
+                                        <div className="divide-y overflow-y-auto max-h-96 pr-1" style={{ borderColor: '#1e1e1e' }}>
                                             {filteredMachines.length === 0 ? (
                                                 <p className="text-sm text-center py-8" style={{ color: '#888' }}>Sin maquinarias para este filtro.</p>
                                             ) : filteredMachines.map(m => (
-                                                <div key={m.id} onClick={() => {
+                                                <div key={m.id}
+                                                    onClick={() => {
                                                         setSelectedMachineMaster(m);
                                                         api.get(`/maintenance-checklists/machine/${m.id}`)
                                                             .then(res => setMaintenanceHistory(res.data || []))
                                                             .catch(console.error);
                                                     }}
-                                                    className="flex items-center justify-between py-4 first:pt-0 cursor-pointer px-2 rounded-xl transition group"
-                                                    style={{ borderColor: '#1e1e1e' }}
+                                                    className="flex items-center justify-between py-3 first:pt-0 cursor-pointer px-2 rounded-xl transition group"
                                                     onMouseOver={e => e.currentTarget.style.background='rgba(255,255,255,0.02)'}
                                                     onMouseOut={e => e.currentTarget.style.background='transparent'}>
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <p className="font-bold text-sm transition-colors group-hover:text-amber-400" style={{ color: '#E8E8E8' }}>{m.name}</p>
+                                                    <div className="space-y-1 flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <p className="font-bold text-sm truncate">{m.name}</p>
                                                             <span className={m.ownership_type === 'propia' ? 'badge-propia' : 'badge-terceros'}>{m.ownership_type}</span>
-                                                            {m.supplier_name && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color:'#888', background:'#161616', border:'1px solid #2a2a2a' }}>📦 {m.supplier_name}</span>}
                                                         </div>
                                                         <p className="text-xs" style={{ color: '#888' }}>S/N: {m.serial_number} · <span style={{ color: '#aaa', fontWeight: 600 }}>{m.current_hours} hs</span></p>
                                                         {m.status === 'rented' && (
                                                             <p className="text-xs" style={{ color: '#888' }}>
                                                                 📍 <span style={{ color: C, fontWeight: 700 }}>{m.client_rented_name}</span>
-                                                                {m.rental_price && <span className="ml-2 font-black" style={{ color: '#4ade80' }}>${Number(m.rental_price).toLocaleString()} USD</span>}
+                                                                {m.rental_price && <span className="ml-2 font-black" style={{ color: '#4ade80' }}>${Number(m.rental_price).toLocaleString()}</span>}
                                                             </p>
                                                         )}
                                                     </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={m.status === 'available' ? 'badge-available' : 'badge-rented'}>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        <span className={`hidden sm:inline ${m.status === 'available' ? 'badge-available' : 'badge-rented'}`}>
                                                             {m.status === 'available' ? 'Disponible' : 'Alquilada'}
                                                         </span>
                                                         <button onClick={e => { e.stopPropagation(); handleDeleteMachine(m.id); }}
                                                             className="p-2 rounded-xl transition"
                                                             style={{ background: '#161616', color: '#555', border: '1px solid #222' }}
-                                                            onMouseOver={e => { e.currentTarget.style.color='#f87171'; e.currentTarget.style.borderColor='rgba(248,113,113,0.3)'; }}
-                                                            onMouseOut={e => { e.currentTarget.style.color='#555'; e.currentTarget.style.borderColor='#222'; }}>
-                                                            <Trash2 className="w-4 h-4" />
+                                                            onMouseOver={e => { e.currentTarget.style.color='#f87171'; }}
+                                                            onMouseOut={e => { e.currentTarget.style.color='#555'; }}>
+                                                            <Trash2 className="w-3.5 h-3.5" />
                                                         </button>
                                                         <div className="p-2 rounded-xl" style={{ background: '#161616', border: '1px solid #222', color: '#555' }}>
-                                                            <ChevronRight className="w-4 h-4 group-hover:text-amber-400 transition-colors" />
+                                                            <ChevronRight className="w-3.5 h-3.5" />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -548,13 +591,13 @@ export default function AdminDashboard() {
                             </div>
                         )}
 
-                        {/* ─── TAB: ANALYTICS ─── */}
+                        {/* TAB: ANALYTICS */}
                         {activeTab === 'analytics' && (
-                            <div className="space-y-6 animate-fadeIn">
-                                <div className="flex justify-between items-center">
+                            <div className="space-y-5 animate-fadeIn">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                                     <div>
-                                        <h2 className="text-2xl font-black">Analíticas Comerciales</h2>
-                                        <p className="text-xs mt-1" style={{ color: '#888' }}>Datos reales calculados desde contratos activos en la base de datos.</p>
+                                        <h2 className="text-2xl font-black">Analíticas</h2>
+                                        <p className="text-xs mt-1" style={{ color: '#888' }}>Datos reales de contratos activos.</p>
                                     </div>
                                     <div className="flex gap-1 p-1 rounded-xl" style={{ background: '#111', border: '1px solid #222' }}>
                                         <button onClick={() => setSalesPeriod('weekly')}
@@ -570,60 +613,53 @@ export default function AdminDashboard() {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-5">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     {[
-                                        { label: `Facturación Real (${salesPeriod === 'weekly' ? 'Semanal' : 'Mensual'})`, value: financeStats.facturacion, color: C, icon: TrendingUp, sub: 'Suma de contratos activos en DB' },
-                                        { label: 'Margen Flota Propia', value: financeStats.margen, color: '#4ade80', icon: DollarSign, sub: 'Facturación menos costos de terceros' },
-                                        { label: 'Costo Subalquileres', value: financeStats.costo, color: '#60a5fa', icon: Building2, sub: 'Pago a propietarios de máquinas terceros' },
+                                        { label: `Facturación (${salesPeriod === 'weekly' ? 'Semanal' : 'Mensual'})`, value: financeStats.facturacion, color: C, icon: TrendingUp },
+                                        { label: 'Margen Flota Propia', value: financeStats.margen, color: '#4ade80', icon: DollarSign },
+                                        { label: 'Costo Subalquileres', value: financeStats.costo, color: '#60a5fa', icon: Building2 },
                                     ].map(s => (
-                                        <div key={s.label} className="p-6 rounded-2xl flex items-center justify-between" style={{ background: '#111', border: '1px solid #222' }}>
-                                            <div className="space-y-1">
+                                        <div key={s.label} className="p-5 rounded-2xl flex items-center justify-between" style={{ background: '#111', border: '1px solid #222' }}>
+                                            <div>
                                                 <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: '#888' }}>{s.label}</p>
-                                                <p className="text-3xl font-black" style={{ color: s.color }}>${Number(s.value).toLocaleString()} USD</p>
-                                                <p className="text-[10px]" style={{ color: '#555' }}>{s.sub}</p>
+                                                <p className="text-2xl font-black mt-1" style={{ color: s.color }}>${Number(s.value).toLocaleString()}</p>
                                             </div>
-                                            <s.icon className="w-10 h-10 opacity-15" style={{ color: s.color }} />
+                                            <s.icon className="w-8 h-8 opacity-15" style={{ color: s.color }} />
                                         </div>
                                     ))}
                                 </div>
 
-                                {/* Tasa de ocupación */}
-                                <div className="p-5 rounded-2xl flex items-center justify-between" style={{ background: '#111', border: '1px solid #222' }}>
-                                    <div className="space-y-1">
-                                        <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: '#888' }}>Tasa de Ocupación de Flota</p>
+                                <div className="p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3" style={{ background: '#111', border: '1px solid #222' }}>
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: '#888' }}>Tasa de Ocupación</p>
                                         <p className="text-2xl font-black" style={{ color: C }}>{financeStats.tasa_ocupacion}%</p>
-                                        <p className="text-[10px]" style={{ color: '#555' }}>{stats.alquiladas} de {stats.total} unidades actualmente alquiladas</p>
+                                        <p className="text-[10px]" style={{ color: '#555' }}>{stats.alquiladas} de {stats.total} unidades alquiladas</p>
                                     </div>
-                                    <div className="w-40">
+                                    <div className="w-full sm:w-40">
                                         <div className="h-3 rounded-full overflow-hidden" style={{ background: '#222' }}>
-                                            <div className="h-full rounded-full transition-all duration-700"
-                                                style={{ width: `${financeStats.tasa_ocupacion}%`, background: C }} />
+                                            <div className="h-full rounded-full transition-all duration-700" style={{ width: `${financeStats.tasa_ocupacion}%`, background: C }} />
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Ranking de máquinas */}
-                                <div className="p-6 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
+                                <div className="p-5 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
                                     <h3 className="font-black mb-4 flex items-center gap-2">
-                                        <Activity className="w-4 h-4" style={{ color: C }} /> Máquinas en Contrato Activo
+                                        <Activity className="w-4 h-4" style={{ color: C }} /> Contratos Activos
                                     </h3>
                                     <div className="space-y-3">
                                         {machines.filter(m => m.status === 'rented').length === 0 ? (
-                                            <p className="text-sm" style={{ color: '#888' }}>No hay contratos activos en este momento.</p>
+                                            <p className="text-sm" style={{ color: '#888' }}>No hay contratos activos.</p>
                                         ) : machines.filter(m => m.status === 'rented').map((m, idx) => (
-                                            <div key={m.id} className="p-4 rounded-xl flex justify-between items-center"
+                                            <div key={m.id} className="p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2"
                                                 style={{ background: '#161616', border: '1px solid #222' }}>
                                                 <div>
                                                     <p className="font-bold text-sm">{idx + 1}. {m.name}</p>
                                                     <p className="text-xs mt-0.5" style={{ color: '#888' }}>
                                                         Cliente: <span style={{ color: '#aaa' }}>{m.client_rented_name}</span>
-                                                        · {m.current_hours} hs acumuladas
                                                     </p>
                                                 </div>
-                                                <div className="text-right">
-                                                    {m.rental_price
-                                                        ? <p className="font-black" style={{ color: '#4ade80' }}>${Number(m.rental_price).toLocaleString()} USD</p>
-                                                        : <p className="text-xs" style={{ color: '#888' }}>Sin precio registrado</p>}
+                                                <div className="flex items-center gap-3">
+                                                    {m.rental_price && <p className="font-black" style={{ color: '#4ade80' }}>${Number(m.rental_price).toLocaleString()} USD</p>}
                                                     <span className={m.ownership_type === 'propia' ? 'badge-propia' : 'badge-terceros'}>{m.ownership_type}</span>
                                                 </div>
                                             </div>
@@ -633,21 +669,103 @@ export default function AdminDashboard() {
                             </div>
                         )}
 
-                        {/* ─── TAB: USERS ─── */}
-                        {activeTab === 'users' && (
-                            <div className="space-y-6 animate-fadeIn">
-                                <div>
-                                    <h2 className="text-2xl font-black">Gestión de Usuarios</h2>
-                                    <p className="text-xs mt-1" style={{ color: '#888' }}>Alta y baja de clientes y mecánicos del sistema.</p>
+                        {/* TAB: SOLICITUDES */}
+                        {activeTab === 'solicitudes' && (
+                            <div className="space-y-5 animate-fadeIn">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h2 className="text-2xl font-black">Solicitudes de Cotización</h2>
+                                        <p className="text-xs mt-1" style={{ color: '#888' }}>
+                                            {unreadQuotes > 0
+                                                ? <span style={{ color: '#ef4444' }}>{unreadQuotes} sin leer</span>
+                                                : 'Todas leídas'}
+                                        </p>
+                                    </div>
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-6">
-                                    {/* Formulario alta */}
-                                    <form onSubmit={handleCreateUser} className="col-span-1 p-6 rounded-2xl space-y-4 h-fit" style={{ background: '#111', border: '1px solid #222' }}>
+                                {quotes.length === 0 ? (
+                                    <div className="py-16 rounded-2xl text-center" style={{ background: '#111', border: '1px solid #222' }}>
+                                        <FileText className="w-10 h-10 mx-auto mb-3" style={{ color: '#333' }} />
+                                        <p style={{ color: '#888' }}>No hay solicitudes todavía.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {quotes.map(q => (
+                                            <div key={q.id} className="p-5 rounded-2xl transition-all"
+                                                style={{
+                                                    background: q.read ? '#111' : 'rgba(245,166,35,0.04)',
+                                                    border: q.read ? '1px solid #222' : `1px solid rgba(245,166,35,0.3)`,
+                                                }}>
+                                                <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                            {!q.read && (
+                                                                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full"
+                                                                    style={{ background: '#ef4444', color: '#fff' }}>
+                                                                    Nueva
+                                                                </span>
+                                                            )}
+                                                            <h3 className="font-black text-sm">{q.machine_name}</h3>
+                                                        </div>
+                                                        <p className="text-xs mb-3" style={{ color: '#888' }}>
+                                                            Cliente: <strong style={{ color: C }}>{q.client_name}</strong>
+                                                            {' · '}{new Date(q.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                        </p>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                                            <div className="p-2.5 rounded-xl" style={{ background: '#161616', border: '1px solid #1e1e1e' }}>
+                                                                <p className="text-[9px] uppercase font-black mb-1" style={{ color: '#555' }}>Período</p>
+                                                                <p style={{ color: '#ccc' }}>{q.start_date} → {q.end_date}</p>
+                                                            </div>
+                                                            <div className="p-2.5 rounded-xl" style={{ background: '#161616', border: '1px solid #1e1e1e' }}>
+                                                                <p className="text-[9px] uppercase font-black mb-1" style={{ color: '#555' }}>Destino</p>
+                                                                <p style={{ color: '#ccc' }}>{q.location}</p>
+                                                            </div>
+                                                            {q.notes && (
+                                                                <div className="p-2.5 rounded-xl" style={{ background: '#161616', border: '1px solid #1e1e1e' }}>
+                                                                    <p className="text-[9px] uppercase font-black mb-1" style={{ color: '#555' }}>Notas</p>
+                                                                    <p style={{ color: '#ccc' }}>{q.notes}</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2 shrink-0">
+                                                        <button onClick={() => handleToggleRead(q.id)}
+                                                            className="text-xs font-bold px-3 py-2 rounded-xl transition"
+                                                            style={q.read
+                                                                ? { background: '#161616', color: '#888', border: '1px solid #222' }
+                                                                : { background: 'rgba(74,222,128,0.1)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
+                                                            {q.read ? '○ No leído' : '✓ Leído'}
+                                                        </button>
+                                                        <button onClick={() => handleDeleteQuote(q.id)}
+                                                            className="p-2 rounded-xl transition"
+                                                            style={{ background: '#161616', color: '#555', border: '1px solid #222' }}
+                                                            onMouseOver={e => e.currentTarget.style.color='#f87171'}
+                                                            onMouseOut={e => e.currentTarget.style.color='#555'}>
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* TAB: USUARIOS */}
+                        {activeTab === 'users' && (
+                            <div className="space-y-5 animate-fadeIn">
+                                <div>
+                                    <h2 className="text-2xl font-black">Usuarios</h2>
+                                    <p className="text-xs mt-1" style={{ color: '#888' }}>Alta y baja de clientes y mecánicos.</p>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                                    {/* Formulario */}
+                                    <form onSubmit={handleCreateUser} className="lg:col-span-1 p-5 rounded-2xl space-y-4 h-fit" style={{ background: '#111', border: '1px solid #222' }}>
                                         <h3 className="font-black flex items-center gap-2">
                                             <UserPlus className="w-4 h-4" style={{ color: C }} /> Nuevo Usuario
                                         </h3>
-
                                         <div>
                                             <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: '#888' }}>Rol</label>
                                             <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}
@@ -656,11 +774,10 @@ export default function AdminDashboard() {
                                                 <option value="mechanic">Mecánico</option>
                                             </select>
                                         </div>
-
-                                        <div className="p-4 rounded-xl space-y-3" style={{ background: '#161616', border: '1px solid #1e1e1e' }}>
+                                        <div className="p-3 rounded-xl space-y-3" style={{ background: '#161616', border: '1px solid #1e1e1e' }}>
                                             {newUser.role === 'mechanic' ? (
                                                 <>
-                                                    <div className="grid grid-cols-2 gap-3">
+                                                    <div className="grid grid-cols-2 gap-2">
                                                         <div>
                                                             <label className="block text-[10px] font-black uppercase mb-1" style={{ color: '#888' }}>Nombre</label>
                                                             <input type="text" required value={newUser.first_name}
@@ -674,46 +791,23 @@ export default function AdminDashboard() {
                                                                 className="block w-full rounded-xl text-sm px-3 py-2" placeholder="Pérez" />
                                                         </div>
                                                     </div>
-                                                    <div>
-                                                        <label className="block text-[10px] font-black uppercase mb-1" style={{ color: '#888' }}>Teléfono</label>
-                                                        <input type="tel" value={newUser.phone}
-                                                            onChange={e => setNewUser({...newUser, phone: e.target.value})}
-                                                            className="block w-full rounded-xl text-sm px-3 py-2" placeholder="+54 9 11..." />
-                                                    </div>
                                                 </>
                                             ) : (
-                                                <>
-                                                    <div>
-                                                        <label className="block text-[10px] font-black uppercase mb-1" style={{ color: '#888' }}>Empresa</label>
-                                                        <input type="text" required value={newUser.company_name}
-                                                            onChange={e => setNewUser({...newUser, company_name: e.target.value})}
-                                                            className="block w-full rounded-xl text-sm px-3 py-2" placeholder="Constructora Sur S.A." />
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        <div>
-                                                            <label className="block text-[10px] font-black uppercase mb-1" style={{ color: '#888' }}>Razón Social</label>
-                                                            <input type="text" value={newUser.business_name}
-                                                                onChange={e => setNewUser({...newUser, business_name: e.target.value})}
-                                                                className="block w-full rounded-xl text-sm px-3 py-2" placeholder="Constructora SA" />
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-[10px] font-black uppercase mb-1" style={{ color: '#888' }}>CUIT</label>
-                                                            <input type="text" value={newUser.cuit}
-                                                                onChange={e => setNewUser({...newUser, cuit: e.target.value})}
-                                                                className="block w-full rounded-xl text-sm px-3 py-2" placeholder="30-71..." />
-                                                        </div>
-                                                    </div>
-                                                </>
+                                                <div>
+                                                    <label className="block text-[10px] font-black uppercase mb-1" style={{ color: '#888' }}>Empresa</label>
+                                                    <input type="text" required value={newUser.company_name}
+                                                        onChange={e => setNewUser({...newUser, company_name: e.target.value})}
+                                                        className="block w-full rounded-xl text-sm px-3 py-2" placeholder="Constructora Sur S.A." />
+                                                </div>
                                             )}
                                         </div>
-
                                         <div className="space-y-3 pt-1" style={{ borderTop: '1px solid #222' }}>
                                             <div>
                                                 <label className="block text-[10px] font-black uppercase mb-1.5" style={{ color: '#888' }}>Usuario (para iniciar sesión)</label>
                                                 <input type="text" required value={newUser.username}
                                                     onChange={e => setNewUser({...newUser, username: e.target.value.toLowerCase().replace(/\s+/g, '_')})}
-                                                    className="block w-full rounded-xl text-sm px-3 py-2" placeholder="ej: jperez o constructora_sur" />
-                                                <p className="text-[10px] mt-1" style={{ color: '#555' }}>Sin espacios. Esto es lo que la persona va a usar para loguearse.</p>
+                                                    className="block w-full rounded-xl text-sm px-3 py-2" placeholder="ej: jperez" />
+                                                <p className="text-[10px] mt-1" style={{ color: '#555' }}>Sin espacios. Lo usa para loguearse.</p>
                                             </div>
                                             <div>
                                                 <label className="block text-[10px] font-black uppercase mb-1.5" style={{ color: '#888' }}>Email (opcional)</label>
@@ -728,17 +822,16 @@ export default function AdminDashboard() {
                                                     className="block w-full rounded-xl text-sm px-3 py-2" placeholder="••••••••" />
                                             </div>
                                         </div>
-
                                         <button type="submit"
-                                            className="w-full py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition torq-glow"
+                                            className="w-full py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition"
                                             style={{ background: C, color: '#0a0a0a' }}>
                                             Inscribir en Torq
                                         </button>
                                     </form>
 
-                                    {/* Lista de usuarios */}
-                                    <div className="col-span-2 space-y-5">
-                                        <div className="p-6 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
+                                    {/* Lista usuarios */}
+                                    <div className="lg:col-span-2 space-y-4">
+                                        <div className="p-5 rounded-2xl" style={{ background: '#111', border: '1px solid #222' }}>
                                             <h3 className="font-black mb-4">Nómina del Sistema</h3>
                                             <div className="divide-y" style={{ borderColor: '#1e1e1e' }}>
                                                 {users.length === 0 ? (
@@ -746,24 +839,27 @@ export default function AdminDashboard() {
                                                 ) : users.map(u => (
                                                     <div key={u.id}
                                                         onClick={() => u.role === 'client' ? setSelectedClientHistory(u) : null}
-                                                        className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0 px-2 rounded-xl transition group"
+                                                        className="flex items-center justify-between py-3 first:pt-0 last:pb-0 px-2 rounded-xl transition"
                                                         style={u.role === 'client' ? { cursor:'pointer' } : {}}
                                                         onMouseOver={e => u.role === 'client' && (e.currentTarget.style.background='rgba(255,255,255,0.02)')}
                                                         onMouseOut={e => e.currentTarget.style.background='transparent'}>
                                                         <div>
-                                                            <p className="font-bold text-sm transition-colors" style={{ color: '#E8E8E8' }}>{u.name}</p>
+                                                            <p className="font-bold text-sm">{u.name}</p>
                                                             <p className="text-xs mt-0.5" style={{ color: '#888' }}>
                                                                 @{u.username} ·{' '}
                                                                 <span className="font-black uppercase text-[9px]" style={{ color: u.role === 'mechanic' ? '#60a5fa' : C }}>
                                                                     {u.role === 'mechanic' ? 'Mecánico' : 'Cliente'}
                                                                 </span>
                                                             </p>
+                                                            {u.email && (
+                                                                <p className="text-[10px] mt-0.5" style={{ color: '#666' }}>✉ {u.email}</p>
+                                                            )}
                                                         </div>
                                                         <button onClick={e => { e.stopPropagation(); handleDeleteUser(u.id); }}
                                                             className="p-2 rounded-xl transition"
                                                             style={{ background:'#161616', color:'#555', border:'1px solid #222' }}
-                                                            onMouseOver={e => { e.currentTarget.style.color='#f87171'; e.currentTarget.style.borderColor='rgba(248,113,113,0.3)'; }}
-                                                            onMouseOut={e => { e.currentTarget.style.color='#555'; e.currentTarget.style.borderColor='#222'; }}>
+                                                            onMouseOver={e => e.currentTarget.style.color='#f87171'}
+                                                            onMouseOut={e => e.currentTarget.style.color='#555'}>
                                                             <Trash2 className="w-4 h-4" />
                                                         </button>
                                                     </div>
@@ -772,11 +868,11 @@ export default function AdminDashboard() {
                                         </div>
 
                                         {selectedClientHistory && (
-                                            <div className="p-6 rounded-2xl animate-fadeIn" style={{ background:'#111', border:`1px solid ${C}40` }}>
+                                            <div className="p-5 rounded-2xl animate-fadeIn" style={{ background:'#111', border:`1px solid ${C}40` }}>
                                                 <div className="flex justify-between items-center mb-4">
                                                     <div>
-                                                        <h4 className="font-black text-lg">{selectedClientHistory.name}</h4>
-                                                        <p className="text-xs" style={{ color:'#888' }}>Historial de contratos activos</p>
+                                                        <h4 className="font-black">{selectedClientHistory.name}</h4>
+                                                        <p className="text-xs" style={{ color:'#888' }}>Contratos activos</p>
                                                     </div>
                                                     <button onClick={() => setSelectedClientHistory(null)}
                                                         className="text-xs px-3 py-1.5 rounded-lg"
@@ -791,10 +887,8 @@ export default function AdminDashboard() {
                                                         <div key={m.id} className="p-4 rounded-xl flex justify-between items-center"
                                                             style={{ background:'#161616', border:'1px solid #222' }}>
                                                             <div>
-                                                                <p className="font-bold">🚜 {m.name}</p>
-                                                                <p className="text-xs mt-0.5" style={{ color:'#888' }}>
-                                                                    {m.rented_from} → {m.rented_to}
-                                                                </p>
+                                                                <p className="font-bold text-sm">🚜 {m.name}</p>
+                                                                <p className="text-xs mt-0.5" style={{ color:'#888' }}>{m.rented_from} → {m.rented_to}</p>
                                                             </div>
                                                             <div className="text-right">
                                                                 <span className="badge-rented block mb-1">Vigente</span>
@@ -811,7 +905,8 @@ export default function AdminDashboard() {
                         )}
                     </>
                 )}
-            </main>
+                </main>
+            </div>
         </div>
     );
 }

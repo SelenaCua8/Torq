@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Hash;
 class UserController extends Controller
 {
     /**
-     * Lista todos los usuarios (sin el propio admin).
+     * Lista todos los usuarios con info de contacto completa.
      */
     public function index()
     {
@@ -23,8 +23,7 @@ class UserController extends Controller
     }
 
     /**
-     * Crea un nuevo usuario (mecánico o cliente) desde el panel del admin.
-     * Se loguean con un usuario/apodo, sin necesidad de un mail real.
+     * Crea un nuevo usuario.
      */
     public function store(Request $request)
     {
@@ -49,12 +48,12 @@ class UserController extends Controller
 
         return response()->json([
             'message' => 'Usuario creado con éxito.',
-            'user'    => $user->only('id', 'name', 'username', 'role')
+            'user'    => $user->only('id', 'name', 'username', 'email', 'role')
         ], 201);
     }
 
     /**
-     * Elimina un usuario (el admin no puede eliminarse a sí mismo).
+     * Elimina un usuario.
      */
     public function destroy($id)
     {
@@ -65,7 +64,6 @@ class UserController extends Controller
         }
 
         $user->delete();
-
         return response()->json(['message' => 'Usuario eliminado correctamente.'], 200);
     }
 }
