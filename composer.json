@@ -13,6 +13,7 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.9",
         "nesbot/carbon": "^3.8",
+        "resend/resend-laravel": "^1.4",
         "symfony/clock": "^7.0",
         "symfony/css-selector": "^7.0",
         "symfony/event-dispatcher": "^7.0",
